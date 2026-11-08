@@ -1,0 +1,80 @@
+{
+  "_about": "Stores added by hand. scripts/snapshot_offcampus.py merges these into offcampus.js on every run. Snowflake wins for anything it provides: to supply prices from Snowflake, use exactly the same store name there. To add prices by hand, fill in products, e.g. {\"brand\": \"Monster\", \"product\": \"Monster Energy Original\", \"size_oz\": 16, \"pack_count\": 1, \"price\": 2.68, \"last_updated\": \"2026-11-08\"}. Hours use the same format as data.js.",
+  "stores": [
+    {
+      "name": "CVS Pharmacy (University Dr)",
+      "short": "CVS",
+      "store_type": "convenience",
+      "address": "717 University Dr, College Station, TX 77840",
+      "lat": 30.6214006,
+      "lng": -96.3428458,
+      "hours": { "mon": "07:00-00:00", "tue": "07:00-00:00", "wed": "07:00-00:00", "thu": "07:00-00:00", "fri": "07:00-00:00", "sat": "07:00-00:00", "sun": "07:00-00:00" },
+      "hours_text": "",
+      "products": [
+        { "brand": "C4", "product": "C4 Energy", "size_oz": 16, "pack_count": 1, "price": 3.49, "last_updated": "2026-11-08" },
+        { "brand": "Red Bull", "product": "Red Bull", "size_oz": 8.4, "pack_count": 1, "price": 3.79, "last_updated": "2026-11-08" },
+        { "brand": "Alani Nu", "product": "Alani Nu", "size_oz": 12, "pack_count": 1, "price": 2.99, "last_updated": "2026-11-08" },
+        { "brand": "Bang", "product": "Bang Energy", "size_oz": 16, "pack_count": 1, "price": 3.49, "last_updated": "2026-11-08" },
+        { "brand": "Monster", "product": "Monster Energy", "size_oz": 16, "pack_count": 1, "price": 3.49, "last_updated": "2026-11-08" },
+        { "brand": "Celsius", "product": "Celsius", "size_oz": 12, "pack_count": 1, "price": 2.99, "last_updated": "2026-11-08" }
+      ]
+    },
+    {
+      "name": "Brookshire Brothers (Park West)",
+      "short": "Brookshire Bros",
+      "store_type": "grocery",
+      "address": "455 George Bush Dr W, College Station, TX 77840",
+      "lat": 30.6002616,
+      "lng": -96.3421648,
+      "hours": { "mon": "06:00-00:00", "tue": "06:00-00:00", "wed": "06:00-00:00", "thu": "06:00-00:00", "fri": "06:00-00:00", "sat": "06:00-00:00", "sun": "06:00-00:00" },
+      "hours_text": "",
+      "products": [
+        { "brand": "C4", "product": "C4 Energy", "size_oz": 16, "pack_count": 1, "price": 2.50, "last_updated": "2026-11-08" },
+        { "brand": "Ghost", "product": "Ghost Energy", "size_oz": 16, "pack_count": 1, "price": 2.50, "last_updated": "2026-11-08" },
+        { "brand": "Bang", "product": "Bang Energy", "size_oz": 16, "pack_count": 1, "price": 3.00, "last_updated": "2026-11-08" },
+        { "brand": "Red Bull", "product": "Red Bull", "size_oz": 8.4, "pack_count": 1, "price": 2.50, "last_updated": "2026-11-08" },
+        { "brand": "Alani Nu", "product": "Alani Nu", "size_oz": 12, "pack_count": 1, "price": 2.69, "last_updated": "2026-11-08" },
+        { "brand": "Celsius", "product": "Celsius", "size_oz": 12, "pack_count": 1, "price": 2.59, "last_updated": "2026-11-08" }
+      ]
+    },
+    {
+      "name": "H-E-B (Texas Ave)",
+      "short": "H-E-B",
+      "store_type": "grocery",
+      "address": "1900 Texas Ave S, College Station, TX 77840",
+      "lat": 30.6129367,
+      "lng": -96.3171633,
+      "hours": { "mon": "06:00-00:00", "tue": "06:00-00:00", "wed": "06:00-00:00", "thu": "06:00-00:00", "fri": "06:00-00:00", "sat": "06:00-00:00", "sun": "06:00-00:00" },
+      "hours_text": "",
+      "products": [
+        { "brand": "Alani Nu", "product": "Alani Nu Zero Sugar", "size_oz": 12, "pack_count": 1, "price": 2.67, "last_updated": "2026-11-08" },
+        { "brand": "C4", "product": "C4 Performance Zero Sugar", "size_oz": 16, "pack_count": 1, "price": 2.72, "last_updated": "2026-11-08" },
+        { "brand": "UPTIME", "product": "UPTIME Zero Sugar", "size_oz": 12, "pack_count": 1, "price": 2.79, "last_updated": "2026-11-08" },
+        { "brand": "3D", "product": "3D Energy", "size_oz": 16, "pack_count": 1, "price": 1.78, "last_updated": "2026-11-08" },
+        { "brand": "H-E-B Quench Plus", "product": "H-E-B Quench Plus (5 for $5)", "size_oz": 20, "pack_count": 1, "price": 1.00, "last_updated": "2026-11-08" },
+        { "brand": "Red Bull", "product": "Red Bull", "size_oz": 8.4, "pack_count": 12, "price": 23.98, "last_updated": "2026-11-08" },
+        { "brand": "Monster", "product": "Monster Energy Original", "size_oz": 16, "pack_count": 12, "price": 24.97, "last_updated": "2026-11-08" },
+        { "brand": "Monster", "product": "Monster Energy Zero Sugar", "size_oz": 16, "pack_count": 12, "price": 24.97, "last_updated": "2026-11-08" }
+      ]
+    },
+    {
+      "name": "Walmart Supercenter (Brothers Blvd)",
+      "short": "Walmart",
+      "store_type": "grocery",
+      "address": "1815 Brothers Blvd, College Station, TX 77845",
+      "lat": 30.5971125,
+      "lng": -96.3000775,
+      "hours": { "mon": "06:00-23:00", "tue": "06:00-23:00", "wed": "06:00-23:00", "thu": "06:00-23:00", "fri": "06:00-23:00", "sat": "06:00-23:00", "sun": "06:00-23:00" },
+      "hours_text": "",
+      "products": [
+        { "brand": "Rockstar", "product": "Rockstar Energy", "size_oz": 16, "pack_count": 1, "price": 1.68, "last_updated": "2026-11-08" },
+        { "brand": "Red Bull", "product": "Red Bull", "size_oz": 12, "pack_count": 4, "price": 11.48, "last_updated": "2026-11-08" },
+        { "brand": "Monster", "product": "Monster Energy Zero Ultra", "size_oz": 16, "pack_count": 12, "price": 24.97, "last_updated": "2026-11-08" },
+        { "brand": "Alani Nu", "product": "Alani Nu Sugar Free Variety Pack", "size_oz": 12, "pack_count": 12, "price": 22.97, "last_updated": "2026-11-08" },
+        { "brand": "Bloom", "product": "Bloom Sparkling Variety Pack", "size_oz": 12, "pack_count": 12, "price": 19.98, "last_updated": "2026-11-08" },
+        { "brand": "Celsius", "product": "Celsius Sparkling", "size_oz": 12, "pack_count": 12, "price": 19.98, "last_updated": "2026-11-08" },
+        { "brand": "Bang", "product": "Bang Energy", "size_oz": 16, "pack_count": 12, "price": 29.76, "last_updated": "2026-11-08" }
+      ]
+    }
+  ]
+}

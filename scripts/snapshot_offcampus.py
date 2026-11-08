@@ -40,6 +40,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "offcampus.js"
 COORDS = ROOT / "scripts" / "store_coords.json"
+MANUAL = ROOT / "scripts" / "manual_stores.json"
 
 PRICES_PROC = os.environ.get("PRICES_PROCEDURE") or "MY_DB.PUBLIC.GET_ENERGY_DRINK_PRICES"
 HOURS_PROC = os.environ.get("HOURS_PROCEDURE") or "MY_DB.PUBLIC.GET_STORE_HOURS"
@@ -282,6 +283,28 @@ def build_stores(price_rows, hour_rows):
     return sorted(out, key=lambda s: s["name"].lower())
 
 
+def merge_manual(stores):
+    """Add the stores from scripts/manual_stores.json. Snowflake wins for anything it provides."""
+    if not MANUAL.exists():
+        return stores
+    by_key = {store_key(s["name"]): s for s in stores}
+    for m in json.loads(MANUAL.read_text(encoding="utf-8")).get("stores", []):
+        k = store_key(m["name"])
+        if k not in by_key:
+            by_key[k] = {"name": m["name"], "store_type": "", "address": "", "hours": None,
+                         "hours_text": "", "lat": None, "lng": None, "products": [],
+                         "membership_required": False,
+                         "id": re.sub(r"[^a-z0-9]+", "-", m["name"].lower()).strip("-")[:40]}
+        s = by_key[k]
+        for field in ("short", "store_type", "address", "hours", "hours_text", "lat", "lng"):
+            if s.get(field) in (None, "") and m.get(field) not in (None, ""):
+                s[field] = m[field]
+        if not s["products"]:
+            s["products"] = m.get("products", [])
+        s["membership_required"] = s["store_type"] == "wholesale"
+    return sorted(by_key.values(), key=lambda s: s["name"].lower())
+
+
 # ---------------------------------------------------------------- store positions
 
 def place_stores(stores):
@@ -310,6 +333,19 @@ def place_stores(stores):
             s["lat"], s["lng"] = cache[key]
     if changed:
         COORDS.write_text(json.dumps(cache, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def keep_map_stores(stores):
+    """Publish only real stores that have a map position; sample rows in Snowflake stay out of the site."""
+    kept = []
+    for s in stores:
+        if re.match(r"sample\b", s["name"], re.I) or re.search(r"test address", s["address"], re.I):
+            print("  leaving out sample store: %s" % s["name"])
+        elif s["lat"] is None or s["lng"] is None:
+            print("  leaving out %s: no map position (add lat/lng in scripts/store_coords.json)" % s["name"])
+        else:
+            kept.append(s)
+    return kept
 
 
 # ---------------------------------------------------------------- output
@@ -380,9 +416,9 @@ def main():
     hour_rows = json.loads(json.dumps(hour_rows, default=default))
     print("Got %d price rows and %d store-hours rows." % (len(price_rows), len(hour_rows)))
 
-    stores = build_stores(price_rows, hour_rows)
+    stores = merge_manual(build_stores(price_rows, hour_rows))
     place_stores(stores)
-    write(stores)
+    write(keep_map_stores(stores))
 
 
 if __name__ == "__main__":

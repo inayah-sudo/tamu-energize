@@ -30,7 +30,7 @@
       price: numOrNull(p.price), verified: false, observed_at: String(p.last_updated || ""),
     }));
     return {
-      id, name: String(s.name), short: String(s.name), offcampus: true, wholesale,
+      id, name: String(s.name), short: String(s.name), pinLabel: String(s.short || s.name), offcampus: true, wholesale,
       membership: s.membership_required == null ? wholesale : !!s.membership_required,
       address: String(s.address || ""), description: String(s.address || ""),
       lat: numOrNull(s.lat), lng: numOrNull(s.lng), coord_source: "osm",
@@ -137,7 +137,7 @@
   }
 
   /** Stable id for one drink at one vendor, e.g. "msc-vend|Red Bull|8.4" or "oc-heb|Monster|12x16". */
-  const drinkKey = (v, d) => v.id + "|" + d.brand + "|" + ((d.pack_count || 1) > 1 ? d.pack_count + "x" : "") + d.size_oz;
+  const drinkKey = (v, d) => v.id + "|" + (v.id.indexOf("oc-") === 0 ? d.product : d.brand) + "|" + ((d.pack_count || 1) > 1 ? d.pack_count + "x" : "") + d.size_oz;
   const drinkIndex = {};
   ALL_PLACES.forEach((b) => b.vendors.forEach((v) => v.drinks.forEach((d) => { drinkIndex[drinkKey(v, d)] = { b, v, d }; })));
   const findDrink = (key) => drinkIndex[key] || null;
@@ -406,7 +406,7 @@
     // Keep the pins clear of the floating header and side panel on wide screens.
     const pad = PHONE.matches
       ? { paddingTopLeft: [124, 40], paddingBottomRight: [96, 36] } // room for labels that hang beside their pin
-      : { paddingTopLeft: [60, 60], paddingBottomRight: [60, 40] };
+      : { paddingTopLeft: [state.scope === "town" ? 100 : 60, 60], paddingBottomRight: [state.scope === "town" ? 100 : 60, 40] };
     map.fitBounds(scopeBounds(), Object.assign({ maxZoom: 17, animate: false }, pad));
     syncZoomClass();
   }
@@ -442,7 +442,7 @@
       const price = s.cheapest ? (b.offcampus ? fmtPpo(s.cheapest.d) : money(s.cheapest.d.price)) : "";
       const html = '<div class="' + cls.join(" ") + '">' +
         '<div class="pin-row"><span class="dot ' + (s.anyOpen ? "open" : "closed") + '"></span>' +
-        '<span class="pin-name">' + esc(b.short) + "</span>" +
+        '<span class="pin-name">' + esc(b.pinLabel || b.short) + "</span>" +
         (price ? '<span class="pin-price">' + price + "</span>" : "") + "</div>" +
         '<div class="pin-sub">' + esc(sub) + "</div></div>";
       m.setIcon(L.divIcon({ className: "pin-wrap", html, iconSize: [0, 0] }));
@@ -797,7 +797,7 @@
     const prev = myReportsFor(key);
     const last = prev[prev.length - 1];
     $("#reportTarget").innerHTML =
-      "<b>" + esc(f.d.brand) + " · " + esc(sizeLabel(f.d)) + "</b><br>" +
+      "<b>" + esc(f.b.offcampus ? f.d.product : f.d.brand) + " · " + esc(sizeLabel(f.d)) + "</b><br>" +
       esc(f.b.offcampus ? f.b.name + (f.b.address ? " · " + f.b.address : "") : f.v.name + " · " + f.b.name) +
       "<br>Listed price: <b>" + money(f.d.price) + "</b> " +
       (f.b.offcampus
