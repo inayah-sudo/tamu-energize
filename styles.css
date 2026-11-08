@@ -215,8 +215,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .price .cents { font-size: .78em; }
 .price.price-sm { font-size: 14px; padding: 3px 9px; }
-.price.price-oz { font-size: 15px; }
-.price.price-oz .cents { font-weight: 600; }
+.price.price-can { font-size: 15px; }
+.price.price-can .cents { font-weight: 600; }
 
 /* ---------------------------------------------------------------- place rows */
 .card {

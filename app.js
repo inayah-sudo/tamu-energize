@@ -63,7 +63,8 @@
   const money = (n) => (typeof n === "number" ? "$" + n.toFixed(2) : "—");
   /** Price per fluid ounce: price / total ounces (multipacks: count x ounces per can). */
   const perOz = (d) => (d.price != null && d.size_oz ? d.price / (d.size_oz * (d.pack_count || 1)) : null);
-  const fmtPpo = (d) => (perOz(d) != null ? "$" + perOz(d).toFixed(3) + "/oz" : "—");
+  /** Price of one can: the shelf price, or for a multipack the pack price / number of cans. */
+  const perCan = (d) => (d.price != null ? d.price / (d.pack_count || 1) : null);
   const sizeLabel = (d) => ((d.pack_count || 1) > 1 ? d.pack_count + " × " : "") + (d.size_oz != null ? d.size_oz + " oz" : "size unknown");
   const parseWhen = (iso) => Date.parse(/^\d{4}-\d{2}-\d{2}$/.test(iso) ? iso + "T12:00:00" : String(iso).replace(" ", "T"));
   /** "2026-11-07..." -> "Nov 7" (with the year when it isn't this year). */
@@ -75,10 +76,10 @@
     return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: sameYear ? undefined : "numeric", timeZone: TZ });
   }
   const isStale = (iso) => { const t = parseWhen(iso); return !isNaN(t) && Date.now() - t > STALE_DAYS * 864e5; };
-  /** Off-campus value pill: price per ounce, e.g. "$0.104/oz". */
+  /** Off-campus value pill: price per can, e.g. "$2.08/can". */
   function valueTag(d) {
-    const p = perOz(d);
-    return p == null ? "—" : '<span class="price price-oz" aria-label="$' + p.toFixed(3) + ' per ounce">$' + p.toFixed(3) + '<span class="cents">/oz</span></span>';
+    const p = perCan(d);
+    return p == null ? "—" : '<span class="price price-can" aria-label="$' + p.toFixed(2) + ' per can">$' + p.toFixed(2) + '<span class="cents">/can</span></span>';
   }
   /** Price pill: "$2.50" with the cents set slightly smaller. */
   function priceTag(n, size) {
@@ -346,7 +347,7 @@
 
   /**
    * Summary of one place under the current filters. On campus the headline drink is the cheapest;
-   * off campus, where multipacks are common, it is the best value by price per ounce.
+   * off campus, where multipacks are common, it is the lowest price per can.
    */
   function summary(b) {
     let cheapest = null, count = 0, anyOpen = false;
@@ -357,9 +358,9 @@
       for (const d of v.drinks) {
         if (state.brand && d.brand !== state.brand) continue;
         if (state.openOnly && !open) continue;
-        if (d.price == null || (town && perOz(d) == null)) continue;
+        if (d.price == null) continue;
         count++;
-        const better = !cheapest || (town ? perOz(d) < perOz(cheapest.d) : d.price < cheapest.d.price);
+        const better = !cheapest || (town ? perCan(d) < perCan(cheapest.d) : d.price < cheapest.d.price);
         if (better) cheapest = { d, v };
       }
     }
@@ -439,7 +440,7 @@
       if (b.coord_source !== "osm") cls.push("approx");
       if (b.label_dir && b.label_dir !== "top") cls.push("dir-" + b.label_dir);
       const sub = b.offcampus ? typeLabel(b.vendors[0].type) : [...new Set(b.vendors.map(vendorLabel))].join(" · ");
-      const price = s.cheapest ? (b.offcampus ? fmtPpo(s.cheapest.d) : money(s.cheapest.d.price)) : "";
+      const price = s.cheapest ? money(b.offcampus ? perCan(s.cheapest.d) : s.cheapest.d.price) : "";
       const html = '<div class="' + cls.join(" ") + '">' +
         '<div class="pin-row"><span class="dot ' + (s.anyOpen ? "open" : "closed") + '"></span>' +
         '<span class="pin-name">' + esc(b.pinLabel || b.short) + "</span>" +
@@ -511,7 +512,7 @@
       return;
     }
     const items = list.map((b) => ({ b, s: summary(b), dist: state.you && hasCoords(b) ? distanceM(state.you, b) : null }));
-    const val = (s) => (s.cheapest ? (town ? perOz(s.cheapest.d) : s.cheapest.d.price) : Infinity);
+    const val = (s) => (s.cheapest ? (town ? perCan(s.cheapest.d) : s.cheapest.d.price) : Infinity);
     const far = (d) => (d == null ? Infinity : d);
     items.sort((x, y) => {
       if ((state.brand || state.openOnly) && x.s.matches !== y.s.matches) return x.s.matches ? -1 : 1;
@@ -522,7 +523,7 @@
     });
 
     const hint = "Open now first, then " + (state.you ? "nearest" :
-      town ? "best value per ounce" + (state.brand ? " for " + esc(state.brand) : "") :
+      town ? "lowest price per can" + (state.brand ? " for " + esc(state.brand) : "") :
       state.brand ? "cheapest " + esc(state.brand) : "cheapest drink");
 
     $("#placesView").innerHTML = '<p class="hint">' + items.length + (town ? " stores" : " places") + " · " + hint + "</p>" +
@@ -533,7 +534,7 @@
           ? '<span class="price-big">' + (town ? valueTag(c.d) : priceTag(c.d.price)) + "</span>"
           : '<span class="none">' + (state.brand ? "No " + esc(state.brand) : town ? "No prices" : "—") + "</span>";
         const line = !c ? ""
-          : town ? "Best value: " + esc(c.d.brand) + " " + esc(sizeLabel(c.d)) + " · " + money(c.d.price)
+          : town ? "Cheapest can: " + esc(c.d.brand) + " " + esc(sizeLabel(c.d)) + ((c.d.pack_count || 1) > 1 ? " · " + money(c.d.price) + " pack" : "")
           : "Cheapest: " + esc(c.d.brand) + " " + c.d.size_oz + " oz · " + esc(vendorLabel(c.v));
         const sub = town ? esc(b.address || "Address not listed") : b.vendors.map((v) => esc(vendorLabel(v))).join(" · ");
         const full = town ? esc(typeLabel(b.vendors[0].type)) : esc(b.name);
@@ -571,20 +572,20 @@
 
   const BACK_BTN = '<button type="button" class="back" id="backBtn"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M15 6l-6 6 6 6"/></svg>All places</button>';
 
-  /** Detail view for an off-campus store: one shelf, ranked by price per ounce. */
+  /** Detail view for an off-campus store: one shelf, ranked by price per can. */
   function renderTownDetail(b) {
     const v = b.vendors[0];
     const dir = "https://www.google.com/maps/dir/?api=1&travelmode=driving&destination=" +
       (hasCoords(b) ? b.lat + "," + b.lng : encodeURIComponent(b.name + " " + b.address));
-    const ppoOf = (d) => (perOz(d) == null ? Infinity : perOz(d));
-    const drinks = v.drinks.filter((d) => !state.brand || d.brand === state.brand).slice().sort((a, c) => ppoOf(a) - ppoOf(c));
-    const best = drinks.find((d) => perOz(d) != null);
+    const canOf = (d) => (perCan(d) == null ? Infinity : perCan(d));
+    const drinks = v.drinks.filter((d) => !state.brand || d.brand === state.brand).slice().sort((a, c) => canOf(a) - canOf(c));
+    const best = drinks.find((d) => perCan(d) != null);
     const updated = (d) => !d.observed_at ? '<span class="badge unverified">date unknown</span>'
       : isStale(d.observed_at) ? '<span class="badge unverified" title="Last updated more than ' + STALE_DAYS + ' days ago">' + esc(fmtUpdated(d.observed_at)) + " · may be out of date</span>"
       : '<span class="badge verified" title="When this price was last updated">' + esc(fmtUpdated(d.observed_at)) + "</span>";
     const rows = drinks.map((d) => '<tr class="' + (d === best ? "best" : "") + '"><td><b>' + esc(d.brand) + '</b><span class="sm">' + esc(d.product) + "</span></td>" +
       '<td class="num">' + esc(sizeLabel(d)) + "</td>" +
-      '<td class="num">' + (d.price != null ? priceTag(d.price, "sm") + '<span class="sm">' + fmtPpo(d) + "</span>" : '<span class="sm">Price unavailable</span>') + "</td>" +
+      '<td class="num">' + (d.price != null ? priceTag(d.price, "sm") + ((d.pack_count || 1) > 1 ? '<span class="sm">' + money(perCan(d)) + "/can</span>" : "") : '<span class="sm">Price unavailable</span>') + "</td>" +
       '<td class="num">' + updated(d) + reportedBadge(v, d) + "</td>" + flagCell(v, d) + "</tr>").join("");
 
     $("#detailView").innerHTML = '<div class="detail">' + BACK_BTN +
@@ -594,7 +595,7 @@
       (b.hours ? statusPill(statusOf(b.hours), "Store") : '<span class="status closed"><span class="dot closed"></span>Hours unknown</span>') +
       '<a class="link-btn" href="' + dir + '" target="_blank" rel="noopener">Directions</a>' +
       (state.you && hasCoords(b) ? '<span class="dist">' + fmtDist(distanceM(state.you, b), true) + "</span>" : "") + "</div>" +
-      (b.wholesale ? '<div class="note"><b>Wholesale club.</b> ' + (b.membership ? "You need a membership to buy here. " : "") + "Most prices are for multipacks, so compare them by price per ounce.</div>" : "") +
+      (b.wholesale ? '<div class="note"><b>Wholesale club.</b> ' + (b.membership ? "You need a membership to buy here. " : "") + "Most prices are for multipacks, so compare them by price per can.</div>" : "") +
       (!hasCoords(b) ? '<div class="note">This store couldn\'t be placed on the map from its address.</div>' : "") +
       '<div class="section-title">Energy drinks' + (state.brand ? " · " + esc(state.brand) : "") + "</div>" +
       (drinks.length
@@ -687,6 +688,7 @@
       size: (r) => (r.d.size_oz || 0) * (r.d.pack_count || 1),
       price: (r) => big(r.d.price),
       ppo: (r) => big(perOz(r.d)),
+      can: (r) => big(perCan(r.d)),
       place: (r) => r.b.short + r.v.name,
       dist: (r) => (state.you && hasCoords(r.b) ? distanceM(state.you, r.b) : Infinity),
     }[state.sortKey];
@@ -704,7 +706,7 @@
     $("#compareView").innerHTML =
       '<p class="hint">' + rows.length + " drinks · " + (note ? note + " · " : "") + "tap a row to see it on the map · tap a column to sort</p>" +
       '<table class="compare"><thead><tr>' + head("brand", "Drink") + head("size", "oz", 1) + head("price", "Price", 1) +
-      head("ppo", "$/oz", 1) + head("place", "Where") + (state.you ? head("dist", "Dist", 1) : "") + '<th><span class="sr-only">Report</span></th></tr></thead><tbody>' +
+      (town ? head("can", "$/can", 1) : head("ppo", "$/oz", 1)) + head("place", "Where") + (state.you ? head("dist", "Dist", 1) : "") + '<th><span class="sr-only">Report</span></th></tr></thead><tbody>' +
       rows.map((r) => {
         const ppo = perOz(r.d);
         const tag = town
@@ -714,7 +716,7 @@
           '<span class="sm">' + esc(r.d.product) + tag + reportedBadge(r.v, r.d) + "</span></td>" +
           '<td class="num">' + ((r.d.pack_count || 1) > 1 ? r.d.pack_count + "×" : "") + esc(r.d.size_oz == null ? "?" : r.d.size_oz) + "</td>" +
           '<td class="num"><b>' + money(r.d.price) + "</b></td>" +
-          '<td class="num">' + (ppo != null ? ppo.toFixed(3) : "—") + "</td>" +
+          '<td class="num">' + (town ? (perCan(r.d) != null ? perCan(r.d).toFixed(2) : "—") : ppo != null ? ppo.toFixed(3) : "—") + "</td>" +
           "<td><b>" + esc(r.b.short) + '</b><span class="where"><span class="dot ' + (r.open ? "open" : "closed") + '"></span>' + esc(town ? typeLabel(r.v.type) : vendorLabel(r.v)) + "</span></td>" +
           (state.you ? '<td class="num">' + (hasCoords(r.b) ? (distanceM(state.you, r.b) / 1609.34).toFixed(2) + " mi" : "—") + "</td>" : "") +
           flagCell(r.v, r.d) + "</tr>";
@@ -773,7 +775,7 @@
     if (scope === state.scope) return;
     state.scope = scope;
     state.selected = null;
-    state.sortKey = scope === "town" ? "ppo" : "price";
+    state.sortKey = scope === "town" ? "can" : "price";
     state.sortDir = 1;
     if (state.brand && brands().indexOf(state.brand) < 0) state.brand = null;
     mapTouched = false;

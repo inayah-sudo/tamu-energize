@@ -3,7 +3,7 @@
 An interactive map of energy drink prices in College Station. **On campus** it shows where to buy
 energy drinks at Texas A&M, what each brand costs, where exactly it is inside the building, and
 whether it's open right now. **Off campus** it shows grocery, convenience and wholesale stores around
-town, ranked by price per ounce.
+town, ranked by lowest price per can.
 
 Live site: https://inayah-sudo.github.io/tamu-energize/
 
@@ -22,19 +22,19 @@ Built for the TAMU Datathon **Build Your Own Dataset** challenge.
 
 - **On campus / Off campus** switch at the top. Everything below follows it: map, list, filters and compare table.
 - Map (OpenStreetMap) with a labelled pin per place. Each pin shows an open/closed dot and the
-  cheapest drink there (on campus) or the best price per ounce (off campus).
+  cheapest drink there (on campus) or the lowest price per can (off campus).
 - Click a place to see:
   - its hours, with today's row highlighted
   - on campus: every vendor and where it is inside the building, with walking directions
-  - off campus: the address, store type, driving directions, and every drink ranked by price per ounce,
+  - off campus: the address, store type, driving directions, and every drink ranked by price per can,
     with when each price was last updated
-  - the drinks, with $/oz. Multipacks are priced per ounce as price / (count × oz per can).
+  - the drinks, with $/oz on campus and price per can off campus (multipacks: pack price / number of cans).
 - **Wholesale clubs** (Costco, Sam's Club, …) are labelled, with a note that a membership is required.
 - Off-campus prices older than 14 days are marked "may be out of date"; a store with no price says so
   instead of guessing.
 - Brand filter (Celsius, Monster, Red Bull, …) and an "Open now" filter, worked out in campus time
   (America/Chicago), including hours past midnight.
-- **Compare prices** tab: every drink in one sortable table (price, $/oz, size, place).
+- **Compare prices** tab: every drink in one sortable table (price, $/oz or $/can, size, place).
 - **Dashboard** (header button): the team's Databricks dashboard for the on-campus data, rebuilt inside
   the app and computed live from `data.js`. Click any row or bar to jump to that building on the map.
 - **Report a price** (flag next to every price): anyone can report a price that looks wrong.
@@ -96,7 +96,7 @@ finishes with a notice and the site says off-campus prices aren't connected yet.
 
 **What the procedures should return.** Column names are matched case-insensitively.
 - Prices: `store`, `brand`, `product`, `size_oz`, `pack_count`, `price`, `last_updated`
-  (`price_per_oz` is recomputed in the app).
+  (`price_per_oz` isn't used).
 - Hours: `store`, `address`, plus hours as either a column per day (`monday` … `sunday`, e.g.
   `7:00 AM - 10:00 PM`, `Closed`, `Open 24 hours`), one row per store and `day` with
   `open_time`/`close_time`, or a single `hours` value. Optional `store_type`, `lat`/`lng`.

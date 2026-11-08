@@ -12,13 +12,13 @@ web
 
 **Secondary: TAMU Datathon judges** for the "Build Your Own Dataset" challenge. They look at the data method, data quality and the dashboard. When the two audiences pull in different directions, design decisions favor students.
 
-**Also: students shopping off campus.** Someone stocking up at a grocery, convenience or wholesale store in College Station wants the best value per ounce, whether the store is open, and how fresh the price is.
+**Also: students shopping off campus.** Someone stocking up at a grocery, convenience or wholesale store in College Station wants the lowest price per can, whether the store is open, and how fresh the price is.
 
 **Internal: the TAMU Energize team.** Team members confirm on-campus prices on site and review the price reports visitors send, in the team's Google Sheet. There is no team sign-in in the app.
 
 ## Product Purpose
 
-An interactive map of energy drink prices in College Station. On campus: where to buy energy drinks, what each brand costs (including $/oz), where it is inside each building, and whether it's open now. Off campus: grocery, convenience and wholesale stores ranked by price per ounce, with hours and when each price was last updated.
+An interactive map of energy drink prices in College Station. On campus: where to buy energy drinks, what each brand costs (including $/oz), where it is inside each building, and whether it's open now. Off campus: grocery, convenience and wholesale stores ranked by lowest price per can, with hours and when each price was last updated.
 
 It exists because this information isn't gathered anywhere else. Success means a student can go from "I need a drink" to the right place in a few seconds, and can trust the price they see.
 
@@ -45,7 +45,7 @@ A dataset the team collected themselves, at the level of a single shelf or vendi
   - brand filter and open-now filter, worked out in America/Chicago time, including hours past midnight
   - Compare prices table
   - Dashboard rebuilt from the team's Databricks export: counters, the Building & Venue Guide, average price by building, locations by venue type, and the Energy Drink Catalog
-  - On campus / Off campus switch; off-campus stores ranked by price per ounce (multipacks as price / (count × oz)), wholesale clubs labelled with their membership requirement, prices older than 14 days marked "may be out of date"
+  - On campus / Off campus switch; off-campus stores ranked by lowest price per can (multipacks as pack price / number of cans), wholesale clubs labelled with their membership requirement, prices older than 14 days marked "may be out of date"
   - Report a price, plus My reports (the visitor's own reports, kept in their browser)
   - Near me, which needs https or localhost
   - Removed on purpose: team sign-in, the team review page and CSV export
