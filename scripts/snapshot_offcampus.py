@@ -296,7 +296,7 @@ def merge_manual(stores):
                          "membership_required": False,
                          "id": re.sub(r"[^a-z0-9]+", "-", m["name"].lower()).strip("-")[:40]}
         s = by_key[k]
-        for field in ("short", "store_type", "address", "hours", "hours_text", "lat", "lng"):
+        for field in ("short", "price_source", "accepts_dining_dollars", "store_type", "address", "hours", "hours_text", "lat", "lng"):
             if s.get(field) in (None, "") and m.get(field) not in (None, ""):
                 s[field] = m[field]
         if not s["products"]:

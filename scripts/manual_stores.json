@@ -4,6 +4,7 @@
     {
       "name": "CVS Pharmacy (University Dr)",
       "short": "CVS",
+      "price_source": "Online listing",
       "store_type": "convenience",
       "address": "717 University Dr, College Station, TX 77840",
       "lat": 30.6214006,
@@ -22,6 +23,7 @@
     {
       "name": "Brookshire Brothers (Park West)",
       "short": "Brookshire Bros",
+      "price_source": "Online listing",
       "store_type": "grocery",
       "address": "455 George Bush Dr W, College Station, TX 77840",
       "lat": 30.6002616,
@@ -40,6 +42,7 @@
     {
       "name": "H-E-B (Texas Ave)",
       "short": "H-E-B",
+      "price_source": "Online listing",
       "store_type": "grocery",
       "address": "1900 Texas Ave S, College Station, TX 77840",
       "lat": 30.6129367,
@@ -60,6 +63,7 @@
     {
       "name": "Walmart Supercenter (Brothers Blvd)",
       "short": "Walmart",
+      "price_source": "Online listing",
       "store_type": "grocery",
       "address": "1815 Brothers Blvd, College Station, TX 77845",
       "lat": 30.5971125,

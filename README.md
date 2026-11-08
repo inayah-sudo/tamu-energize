@@ -15,8 +15,9 @@ Built for the TAMU Datathon **Build Your Own Dataset** challenge.
 >   `verified: false` until a team member confirms it on site; the app marks unconfirmed prices once
 >   per building ("prices not confirmed"). Team notes in `location_detail` written as "(fill in …)",
 >   "(todo …)" or "(tbd …)" are hidden from visitors.
-> - **Off campus:** `offcampus.js` is a scheduled snapshot of two Snowflake procedures,
->   `GET_ENERGY_DRINK_PRICES` and `GET_STORE_HOURS` (see *Off-campus prices* below).
+> - **Off campus:** `offcampus.js` combines a scheduled snapshot of two Snowflake procedures,
+>   `GET_ENERGY_DRINK_PRICES` and `GET_STORE_HOURS`, with the stores in `scripts/manual_stores.json`.
+>   Those prices currently come from online listings and are labelled that way in the app.
 
 ## Features
 
@@ -111,6 +112,10 @@ finishes with a notice and the site says off-campus prices aren't connected yet.
 | `app.js` | Map, filters, open/closed logic, compare table, price reports |
 | `data.js` | **On-campus dataset**: buildings, vendors, hours, drinks, prices |
 | `offcampus.js` | **Off-campus dataset**: Snowflake snapshot (generated, don't edit) |
+| `data/` | **The published dataset** (CSV) and the in-person collection sheet |
+| `METHODOLOGY.md` | How the data was collected, fields, processing and limitations |
+| `scripts/manual_stores.json` | Off-campus stores added by hand |
+| `scripts/export_dataset.js` | Builds the CSV files in `data/` |
 | `config.js` | Reports server URL (`reportsEndpoint`) |
 | `scripts/snapshot_offcampus.py` | Pulls the off-campus data from Snowflake |
 | `.github/workflows/offcampus-snapshot.yml` | Runs that script every 6 hours |
@@ -137,6 +142,7 @@ finishes with a notice and the site says off-campus prices aren't connected yet.
 | `name`, `type` | e.g. "Aggie Express (Commons)"; `store`, `vending`, or `market` |
 | `location_detail` | Where inside the building (floor, wing, near which entrance) |
 | `hours` | Vendor hours, or `null` = same as the building |
+| `accepts_dining_dollars` | `true` or `false` once recorded in person; leave out until then |
 
 **Drink** (one row per product per vendor)
 
@@ -153,17 +159,10 @@ finishes with a notice and the site says off-campus prices aren't connected yet.
 - `"22:00-02:00"` runs past midnight.
 - `"24h"` is open all day, and `"closed"` is closed.
 
-## Collecting the data (methodology template — fill in)
+## Collecting the data
 
-1. **Where/when:** list each location visited and the date and time window, e.g. "MSC B&N, Sat Nov 7, 2:10–2:25 PM".
-2. **How:** one team member records each energy drink on the shelf or in the machine.
-   - Note brand, product, size and the posted price.
-   - Note the spot inside the building.
-   - Take a photo of the price tag or machine label as evidence, cropping out people.
-3. **Hours:** copy from the posted sign at the door, or note where else they came from.
-4. **Entry:** update `data.js`, then set `verified: true` and `observed_at`.
-   - The header counter shows how many prices are verified.
-5. **Sample size:** _N_ locations, _N_ vendors, _N_ drink price observations.
+How the data was gathered, its fields, processing, assumptions and limits are in
+[METHODOLOGY.md](METHODOLOGY.md). The dataset itself is in [`data/`](data/).
 
 ## Limitations
 

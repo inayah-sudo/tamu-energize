@@ -30,7 +30,7 @@
       price: numOrNull(p.price), verified: false, observed_at: String(p.last_updated || ""),
     }));
     return {
-      id, name: String(s.name), short: String(s.name), pinLabel: String(s.short || s.name), offcampus: true, wholesale,
+      id, name: String(s.name), short: String(s.name), pinLabel: String(s.short || s.name), priceSource: String(s.price_source || ""), diningDollars: s.accepts_dining_dollars, offcampus: true, wholesale,
       membership: s.membership_required == null ? wholesale : !!s.membership_required,
       address: String(s.address || ""), description: String(s.address || ""),
       lat: numOrNull(s.lat), lng: numOrNull(s.lng), coord_source: "osm",
@@ -76,6 +76,13 @@
     return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: sameYear ? undefined : "numeric", timeZone: TZ });
   }
   const isStale = (iso) => { const t = parseWhen(iso); return !isNaN(t) && Date.now() - t > STALE_DAYS * 864e5; };
+  /** Dining Dollars tag; shows nothing until the team has recorded it for that vendor. */
+  function ddBadge(accepts) {
+    if (accepts === true) return ' <span class="badge verified">Takes Dining Dollars</span>';
+    if (accepts === false) return ' <span class="badge">No Dining Dollars</span>';
+    return "";
+  }
+
   /** Off-campus value pill: price per can, e.g. "$2.08/can". */
   function valueTag(d) {
     const p = perCan(d);
@@ -591,13 +598,14 @@
     $("#detailView").innerHTML = '<div class="detail">' + BACK_BTN +
       "<h2>" + esc(b.name) + "</h2>" +
       '<p class="desc">' + esc(b.address || "Address not listed") + "</p>" +
-      '<div class="detail-actions"><span class="badge">' + esc(typeLabel(v.type)) + "</span>" +
+      '<div class="detail-actions"><span class="badge">' + esc(typeLabel(v.type)) + "</span>" + ddBadge(b.diningDollars) +
       (b.hours ? statusPill(statusOf(b.hours), "Store") : '<span class="status closed"><span class="dot closed"></span>Hours unknown</span>') +
       '<a class="link-btn" href="' + dir + '" target="_blank" rel="noopener">Directions</a>' +
       (state.you && hasCoords(b) ? '<span class="dist">' + fmtDist(distanceM(state.you, b), true) + "</span>" : "") + "</div>" +
       (b.wholesale ? '<div class="note"><b>Wholesale club.</b> ' + (b.membership ? "You need a membership to buy here. " : "") + "Most prices are for multipacks, so compare them by price per can.</div>" : "") +
       (!hasCoords(b) ? '<div class="note">This store couldn\'t be placed on the map from its address.</div>' : "") +
-      '<div class="section-title">Energy drinks' + (state.brand ? " · " + esc(state.brand) : "") + "</div>" +
+      '<div class="section-title">Energy drinks' + (state.brand ? " · " + esc(state.brand) : "") +
+      (/online/i.test(b.priceSource) ? ' <span class="badge unverified" title="Taken from online listings, not checked in the store">online prices, not checked in store</span>' : "") + "</div>" +
       (drinks.length
         ? '<div class="vendor"><table><thead><tr><th>Drink</th><th class="num">Size</th><th class="num">Price</th><th class="num">Updated</th><th><span class="sr-only">Report</span></th></tr></thead><tbody>' + rows + "</tbody></table></div>"
         : '<div class="hint">' + (state.brand ? "No " + esc(state.brand) + " here." : "No energy drink prices for this store yet.") + "</div>") +
@@ -630,7 +638,7 @@
             : "") + reportedBadge(v, d) + "</td>" + flagCell(v, d) + "</tr>";
       }).join("");
       return '<div class="vendor">' +
-        '<div class="vendor-head"><h5>' + esc(v.name) + ' <span class="badge ' + esc(v.type) + '">' + esc(typeLabel(v.type)) + "</span></h5>" +
+        '<div class="vendor-head"><h5>' + esc(v.name) + ' <span class="badge ' + esc(v.type) + '">' + esc(typeLabel(v.type)) + "</span>" + ddBadge(v.accepts_dining_dollars) + "</h5>" +
         statusPill(statusOf(vh)) + "</div>" +
         (publicLoc(v) ? '<div class="loc">' + esc(publicLoc(v)) + "</div>" : "") +
         (drinks.length
@@ -699,7 +707,7 @@
     const head = (k, label, num) =>
       '<th class="' + (num ? "num" : "") + '"><button type="button" data-sort="' + k + '">' + label +
       (state.sortKey === k ? (state.sortDir === 1 ? " ↑" : " ↓") : "") + "</button></th>";
-    const note = town ? "prices from each store's latest data"
+    const note = town ? (TOWN.some((b) => /online/i.test(b.priceSource)) ? "prices from online listings, not checked in store" : "prices from each store's latest data")
       : rows.every((r) => !r.d.verified) ? "prices not confirmed in person yet"
       : rows.some((r) => !r.d.verified) ? "unmarked prices not confirmed yet" : "";
 

@@ -5,7 +5,7 @@
 window.OFFCAMPUS_DATA = {
  "meta": {
   "status": "ok",
-  "generated_at": "2026-11-08T08:42:13+00:00",
+  "generated_at": "2026-11-08T08:53:33+00:00",
   "source": "Snowflake: ENERGY_DB.PRICING.GET_ENERGY_DRINK_PRICES, ENERGY_DB.PRICING.GET_STORE_HOURS",
   "store_count": 4,
   "product_count": 27
@@ -79,7 +79,8 @@ window.OFFCAMPUS_DATA = {
    ],
    "membership_required": false,
    "id": "brookshire-brothers-park-west",
-   "short": "Brookshire Bros"
+   "short": "Brookshire Bros",
+   "price_source": "Online listing"
   },
   {
    "name": "CVS Pharmacy (University Dr)",
@@ -149,7 +150,8 @@ window.OFFCAMPUS_DATA = {
    ],
    "membership_required": false,
    "id": "cvs-pharmacy-university-dr",
-   "short": "CVS"
+   "short": "CVS",
+   "price_source": "Online listing"
   },
   {
    "name": "H-E-B (Texas Ave)",
@@ -235,7 +237,8 @@ window.OFFCAMPUS_DATA = {
    ],
    "membership_required": false,
    "id": "h-e-b-texas-ave",
-   "short": "H-E-B"
+   "short": "H-E-B",
+   "price_source": "Online listing"
   },
   {
    "name": "Walmart Supercenter (Brothers Blvd)",
@@ -313,7 +316,8 @@ window.OFFCAMPUS_DATA = {
    ],
    "membership_required": false,
    "id": "walmart-supercenter-brothers-blvd",
-   "short": "Walmart"
+   "short": "Walmart",
+   "price_source": "Online listing"
   }
  ]
 };
