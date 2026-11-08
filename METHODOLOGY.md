@@ -2,10 +2,10 @@
 
 How the TAMU Energize dataset was gathered, for the TAMU Datathon **Build Your Own Dataset** challenge.
 
-> **Status: in-person collection is planned and not done yet.** The team will physically visit every
-> location and vending machine and record prices and Dining Dollars acceptance. Until then, every price
-> in the app comes from the team's earlier Databricks export or from online listings, and nothing here
-> should be read as observed in person. Blanks marked **`TO FILL IN`** are completed after the visits.
+> **Status: in-person collection is under way.** The team is physically visiting each location and vending
+> machine and recording prices and Dining Dollars acceptance. So far, 22 of the 48 on-campus prices have been
+> observed in person (`verified_in_person` is `true`). Every other price comes from the team's earlier
+> Databricks export, online sources or the team's prior knowledge. Blanks marked **`TO FILL IN`** are completed after the visits.
 
 ## Dataset
 
@@ -22,9 +22,11 @@ Current contents: **48 on-campus prices** at 8 vendors in 7 buildings, and **27 
 
 | Data | Source | Collected in person? |
 |---|---|---|
-| On-campus prices supplied by the team on 2026-11-08 (28: Celsius, Rockstar, Bang, Alani Nu, and Red Bull at Aggie Express) | Team | **Not yet confirmed as seen in person** |
-| Dining Dollars acceptance at all 8 on-campus vendors | Team, 2026-11-08 | **Not yet confirmed as seen in person** |
-| Other on-campus prices (20) | Team's Databricks dashboard export, 2026-11-07 | **No, not yet checked** |
+| On-campus prices at MSC (Barnes & Noble and vending), Aggie Express (Commons and Pavilion), Zachry vending and Evans vending (22) | Team visits | **Yes** |
+| Other on-campus prices checked by the team against online sources and prior knowledge (12) | Team, online sources | **No** |
+| Dining Dollars acceptance at those 6 visited vendors | Team visits | **Yes** |
+| Dining Dollars acceptance at the other on-campus vendors | Team | **Not yet confirmed as seen in person** |
+| Other on-campus prices (14) | Team's Databricks dashboard export, 2026-11-07 | **No, not yet checked** |
 | On-campus building and vendor hours | Same export; marked `hours_verified` where confirmed | Not yet checked |
 | CVS and Brookshire Brothers prices | Online listings | No |
 | H-E-B and Walmart prices | Online listings (retailer pages and Google Shopping) | No |
@@ -36,14 +38,25 @@ in-person observations must be the main dataset.
 
 ## Field collection
 
-**Location and context:** every on-campus building and vending machine, and every off-campus store, in the
-dataset. `TO FILL IN` (the final list visited, including any added on site)
+**Location and context:** Texas A&M main campus, College Station. Visited so far: Memorial Student Center
+(Barnes & Noble and vending machines), Aggie Express at the Commons and the Pavilion, Zachry vending machines and Evans Library
+vending machines. Planned: every remaining on-campus location and vending machine, and each off-campus store.
 
-**When:** `TO FILL IN` (date and time window for each location, during the event)
+**When** (approximate, campus time):
+
+| Location | Date | Time |
+|---|---|---|
+| MSC (Barnes & Noble and vending machines) | Sat, Nov 7, 2026 | about 4:00 PM |
+| Aggie Express (Pavilion) | Sat, Nov 7, 2026 | about 5:30 PM |
+| Aggie Express (Commons) | Sat, Nov 7, 2026 | about 10:00 PM |
+| Zachry vending machines | Sat, Nov 7, 2026 | about 10:30 PM |
+| Evans Library vending machines | Sun, Nov 8, 2026 | about 9:00 AM |
+
+`TO FILL IN` for any later visits.
 
 **Who:** `TO FILL IN` (roles only, e.g. "Collector A". Do not publish names.)
 
-**Sample size:** `TO FILL IN` locations, `TO FILL IN` vendors, `TO FILL IN` price observations
+**Sample size so far:** 5 buildings, 6 vendors, 22 price observations. `TO FILL IN` final totals after the remaining visits.
 
 **Method**
 
@@ -92,6 +105,8 @@ dataset. `TO FILL IN` (the final list visited, including any added on site)
 
 - **Can sizes for CVS and Brookshire Brothers were assumed**, because only prices were available:
   16 oz for C4, Ghost, Bang and Monster, 12 oz for Alani Nu and Celsius, and 8.4 oz for Red Bull.
+- **Can sizes for the on-campus drinks recorded by the team were assumed** unless already in the export: 16 oz for
+  Rockstar and Bang, 12 oz for Celsius and Alani Nu.
 - **H-E-B prices** are filed under the Texas Ave store, but only the Red Bull 12-pack was tied to that store.
   The H-E-B Quench Plus $1.00 price is a 5-for-$5 deal.
 - **Walmart prices** are approximate online prices and may differ at the Brothers Blvd store. Celsius was

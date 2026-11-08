@@ -50,7 +50,7 @@ A dataset the team collected themselves, at the level of a single shelf or vendi
   - Near me, which needs https or localhost
   - Removed on purpose: team sign-in, the team review page and CSV export
 - **Coverage:** seven buildings: MSC, Zachry, Evans, Commons, Pavilion, Polo Road Garage, and ILCB / Market at Lamar. Vendor types are vending, bookstore and market. Brands are Red Bull, Monster, Celsius, 5-hour Energy and Alani Nu.
-- **Terminology:** "verified" means a team member saw the price in person. "Prices not confirmed" labels on-campus prices nobody has checked. Off-campus prices are never "verified"; they carry their last-updated date from the data source.
+- **Terminology:** "verified" means a team member saw the price in person. The app doesn't show verification labels; the published dataset's `verified_in_person` and `source` columns record it. Off-campus prices carry their last-updated date.
 - **Known limits:**
   - prices are a snapshot, and vending machines may charge differently for card and cash
   - stock varies
@@ -64,21 +64,21 @@ A dataset the team collected themselves, at the level of a single shelf or vendi
 
 - **Name:** TAMU Energize. Subtitle in use: "Energy drink prices · College Station, TX".
 - **Disclaimer to keep:** not affiliated with Texas A&M University or any brand shown. Map tiles and coordinates © OpenStreetMap contributors.
-- **Voice:** plain and practical, honest about uncertainty. Unverified data is always labeled.
+- **Voice:** plain and practical, honest about uncertainty.
 - **Reporter privacy:** reports ask people not to include names or personal details.
 
 ## Evidence on Hand
 
-- `data.js`: buildings, vendors, hours and drinks, from the team's Databricks export (`campus_buildings`, `energy_drink_catalog`) dated 2026-11-07. Every price is currently `verified: false`.
+- `data.js`: buildings, vendors, hours and drinks, from the team's Databricks export (`campus_buildings`, `energy_drink_catalog`) dated 2026-11-07. 22 on-campus prices are `verified: true`, seen in person by the team.
 - `aggie_energy_drinks.csv` (copy in `../data/`): 27 drink-price rows across 7 buildings, all unverified, and several location details still placeholders.
 - The README's data-method section is a template. Sample sizes and visit times aren't filled in.
 - `offcampus.js`: no off-campus data yet (placeholder until the Snowflake snapshot runs). Don't invent store prices or hours.
-- There are no testimonials, usage numbers, partner endorsements or verified prices yet. Don't make any up.
+- There are no testimonials, usage numbers or partner endorsements yet. Don't make any up.
 
 ## Product Principles
 
 1. **Answer the walking question fast.** Where, how much, is it open: everything else comes second to getting a student to a drink.
-2. **Never present a guess as a fact.** Verification status, timestamps and approximate positions stay visible wherever a value appears.
+2. **Never present a guess as a fact.** Sources and observation times stay in the published dataset, and off-campus update dates stay visible.
 3. **Phones on campus are the default.** Design for one hand, glare and a short attention span. A big desktop screen is the bonus case.
 4. **Keep the dataset alive.** Reporting a price should take seconds for visitors, and the team's job of checking and publishing should stay quick enough to actually happen after the Datathon.
 5. **Stay static and free to host.** No build step, no secrets in the browser, and no paid backend beyond the team-owned Google Sheet and the scheduled snapshot.

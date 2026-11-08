@@ -12,12 +12,12 @@ Built for the TAMU Datathon **Build Your Own Dataset** challenge.
 > **Data sources**
 > - **On campus:** `data.js` holds the team's dataset from the Databricks dashboard export
 >   (`campus_buildings` and `energy_drink_catalog`, 2026-11-07). Each price stays marked
->   `verified: false` until a team member confirms it on site; the app marks unconfirmed prices once
->   per building ("prices not confirmed"). Team notes in `location_detail` written as "(fill in …)",
+>   `verified: false` until a team member confirms it on site; the published dataset records which prices
+>   were seen in person. Team notes in `location_detail` written as "(fill in …)",
 >   "(todo …)" or "(tbd …)" are hidden from visitors.
 > - **Off campus:** `offcampus.js` combines a scheduled snapshot of two Snowflake procedures,
 >   `GET_ENERGY_DRINK_PRICES` and `GET_STORE_HOURS`, with the stores in `scripts/manual_stores.json`.
->   Those prices currently come from online listings and are labelled that way in the app.
+>   Those prices currently come from online listings and are labelled that way in the dataset.
 
 ## Features
 

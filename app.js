@@ -605,7 +605,7 @@
       (b.wholesale ? '<div class="note"><b>Wholesale club.</b> ' + (b.membership ? "You need a membership to buy here. " : "") + "Most prices are for multipacks, so compare them by price per can.</div>" : "") +
       (!hasCoords(b) ? '<div class="note">This store couldn\'t be placed on the map from its address.</div>' : "") +
       '<div class="section-title">Energy drinks' + (state.brand ? " · " + esc(state.brand) : "") +
-      (/online/i.test(b.priceSource) ? ' <span class="badge unverified" title="Taken from online listings, not checked in the store">online prices, not checked in store</span>' : "") + "</div>" +
+      "</div>" +
       (drinks.length
         ? '<div class="vendor"><table><thead><tr><th>Drink</th><th class="num">Size</th><th class="num">Price</th><th class="num">Updated</th><th><span class="sr-only">Report</span></th></tr></thead><tbody>' + rows + "</tbody></table></div>"
         : '<div class="hint">' + (state.brand ? "No " + esc(state.brand) + " here." : "No energy drink prices for this store yet.") + "</div>") +
@@ -619,7 +619,6 @@
     const b = placeById(state.selected);
     if (!b) return;
     if (b.offcampus) return renderTownDetail(b);
-    const allConfirmed = b.vendors.every((v) => v.drinks.every((d) => d.verified));
     const dir = "https://www.google.com/maps/dir/?api=1&travelmode=walking&destination=" + b.lat + "," + b.lng;
 
     const vendorsHtml = b.vendors.map((v) => {
@@ -633,9 +632,7 @@
         return '<tr class="' + (d.price === minPrice ? "best" : "") + '"><td><b>' + esc(d.brand) + '</b><span class="sm">' + esc(d.product) + "</span></td>" +
           '<td class="num">' + esc(d.size_oz) + " oz</td>" +
           '<td class="num">' + priceTag(d.price, "sm") + '<span class="sm">' + (ppo ? "$" + ppo.toFixed(3) + "/oz" : "") + "</span></td>" +
-          '<td class="num">' + (d.verified
-            ? '<span class="badge verified" title="' + esc(d.observed_at || "") + '">verified</span>'
-            : "") + reportedBadge(v, d) + "</td>" + flagCell(v, d) + "</tr>";
+          '<td class="num">' + reportedBadge(v, d) + "</td>" + flagCell(v, d) + "</tr>";
       }).join("");
       return '<div class="vendor">' +
         '<div class="vendor-head"><h5>' + esc(v.name) + ' <span class="badge ' + esc(v.type) + '">' + esc(typeLabel(v.type)) + "</span>" + ddBadge(v.accepts_dining_dollars) + "</h5>" +
@@ -645,7 +642,7 @@
           ? '<table><thead><tr><th>Drink</th><th class="num">Size</th><th class="num">Price</th><th></th><th><span class="sr-only">Report</span></th></tr></thead><tbody>' + rows + "</tbody></table>"
           : '<div class="hint">No ' + esc(state.brand) + " here.</div>") +
         "<details><summary>" + (v.hours ? "Store hours" : "Hours: same as building") +
-        (v.hours && v.hours_verified === false ? ' <span class="badge unverified">not verified</span>' : "") + "</summary>" + hoursTable(vh) + "</details>" +
+        "</summary>" + hoursTable(vh) + "</details>" +
         "</div>";
     }).join("");
 
@@ -658,9 +655,8 @@
       (state.you ? '<span class="dist">' + fmtDist(distanceM(state.you, b)) + "</span>" : "") + "</div>" +
       (b.coord_source !== "osm" ? '<div class="note">Map position is approximate. Right-click (or long-press) the map at the right spot to get coordinates for data.js.</div>' : "") +
       '<div class="section-title">Energy drinks' + (state.brand ? " · " + esc(state.brand) : "") +
-      (allConfirmed ? "" : ' <span class="badge unverified" title="Not yet checked in person by the team. Tap the flag next to a price if it looks wrong.">prices not confirmed</span>') +
       "</div>" + vendorsHtml +
-      '<div class="section-title">Building hours ' + (b.hours_verified ? '<span class="badge verified">verified</span>' : '<span class="badge unverified">not verified</span>') + "</div>" +
+      '<div class="section-title">Building hours</div>' +
       hoursTable(b.hours) +
       "</div>";
     $("#backBtn").addEventListener("click", () => { state.selected = null; render(); });
@@ -707,9 +703,7 @@
     const head = (k, label, num) =>
       '<th class="' + (num ? "num" : "") + '"><button type="button" data-sort="' + k + '">' + label +
       (state.sortKey === k ? (state.sortDir === 1 ? " ↑" : " ↓") : "") + "</button></th>";
-    const note = town ? (TOWN.some((b) => /online/i.test(b.priceSource)) ? "prices from online listings, not checked in store" : "prices from each store's latest data")
-      : rows.every((r) => !r.d.verified) ? "prices not confirmed in person yet"
-      : rows.some((r) => !r.d.verified) ? "unmarked prices not confirmed yet" : "";
+    const note = town ? "prices from each store's latest data" : "";
 
     $("#compareView").innerHTML =
       '<p class="hint">' + rows.length + " drinks · " + (note ? note + " · " : "") + "tap a row to see it on the map · tap a column to sort</p>" +
@@ -719,7 +713,7 @@
         const ppo = perOz(r.d);
         const tag = town
           ? (r.d.observed_at && isStale(r.d.observed_at) ? ' · <span class="badge unverified">may be out of date</span>' : "")
-          : (r.d.verified ? ' · <span class="badge verified">confirmed</span>' : "");
+          : "";
         return '<tr data-id="' + r.b.id + '"><td><b>' + esc(r.d.brand) + "</b>" +
           '<span class="sm">' + esc(r.d.product) + tag + reportedBadge(r.v, r.d) + "</span></td>" +
           '<td class="num">' + ((r.d.pack_count || 1) > 1 ? r.d.pack_count + "×" : "") + esc(r.d.size_oz == null ? "?" : r.d.size_oz) + "</td>" +
@@ -751,17 +745,14 @@
 
   function renderHeader() {
     const pill = $("#verifiedCount");
+    pill.hidden = state.scope !== "town"; // only the off-campus sync date is shown here
     if (state.scope === "town") {
       const ok = OFF.meta && OFF.meta.status === "ok" && TOWN.length > 0;
       pill.textContent = ok ? "Prices synced " + fmtUpdated(OFF.meta.generated_at) : "Off-campus prices not connected";
       pill.title = ok ? "When the off-campus prices were last pulled from the data source" : "The Snowflake price snapshot hasn't run yet";
       pill.classList.toggle("done", !!ok);
     } else {
-      const rows = allRows(DATA.buildings);
-      const ok = rows.filter((r) => r.d.verified).length;
-      pill.textContent = ok ? ok + "/" + rows.length + " prices confirmed" : "Prices not yet confirmed";
-      pill.title = "How many on-campus prices the team has checked in person";
-      pill.classList.toggle("done", ok === rows.length);
+      pill.textContent = "";
     }
     document.querySelectorAll("[data-scope]").forEach((b) => {
       const on = b.dataset.scope === state.scope;
@@ -812,7 +803,7 @@
       "<br>Listed price: <b>" + money(f.d.price) + "</b> " +
       (f.b.offcampus
         ? '<span class="badge ' + (f.d.observed_at && !isStale(f.d.observed_at) ? "verified" : "unverified") + '">updated ' + esc(fmtUpdated(f.d.observed_at)) + "</span>"
-        : f.d.verified ? '<span class="badge verified">verified ' + esc(fmtStamp(f.d.observed_at)) + "</span>" : '<span class="badge unverified">unverified</span>') +
+        : "") +
       (last ? '<span class="sm">You reported this drink' + (prev.length > 1 ? " " + prev.length + " times, most recently" : "") +
         " at " + money(last.reported_price) + " on " + esc(fmtStamp(last.created_at)) + "</span>" : "");
     $("#rpPrice").value = "";
@@ -1045,7 +1036,7 @@
       rows.map((r) => '<tr data-id="' + r.b.id + '"><td class="code">' + esc(r.b.code || r.b.short) + "</td><td>" + esc(vendorLabel(r.v)) +
         "</td><td><b>" + esc(r.d.brand) + '</b></td><td class="num">' + r.d.size_oz + ' oz</td><td class="num"><b>' + money(r.d.price) +
         '</b></td><td class="num">$' + (perOz(r.d) || 0).toFixed(2) + '</td><td class="num">' +
-        (r.d.verified ? '<span class="badge verified">verified</span>' : '<span class="badge unverified">unverified</span>') + reportedBadge(r.v, r.d) +
+        reportedBadge(r.v, r.d) +
         "</td>" + flagCell(r.v, r.d) + "</tr>").join("") +
       "</tbody></table></div>";
   }
@@ -1056,10 +1047,9 @@
     const openVendors = vendors.filter((x) => x.st.open).length;
     const openBuildings = DATA.buildings.filter((b) => statusOf(b.hours).open).length;
     const brandList = brands();
-    const verified = rows.filter((r) => r.d.verified).length;
     const cheapest = rows.slice().sort((a, b) => a.d.price - b.d.price)[0];
 
-    $("#dashSource").textContent = "Source: " + (DATA.meta.source || "data.js") + " · " + verified + " of " + rows.length + " prices verified on site";
+    $("#dashSource").textContent = "Source: " + (DATA.meta.source || "data.js");
 
     const kpi = (label, value, note) => '<div class="w w-3 kpi"><span class="kpi-label">' + label + '</span><span class="kpi-value">' + value +
       '</span><span class="kpi-note">' + note + "</span></div>";
