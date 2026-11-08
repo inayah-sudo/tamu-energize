@@ -9,6 +9,39 @@
   const WALK_M_PER_MIN = 80; // ~3 mph
   const PHONE = window.matchMedia("(max-width: 820px)");
 
+  // ---------------------------------------------------------------- off-campus stores
+  // offcampus.js is a snapshot of the Snowflake procedures GET_ENERGY_DRINK_PRICES and
+  // GET_STORE_HOURS, refreshed by .github/workflows/offcampus-snapshot.yml. Each store becomes the
+  // same shape as a campus building (with the store itself as its one vendor), so the map, list,
+  // detail and compare views work for both.
+  const OFF = window.OFFCAMPUS_DATA || { meta: { status: "missing" }, stores: [] };
+  const STALE_DAYS = 14; // older prices are labelled "may be out of date"
+  const WHOLESALE_RE = /costco|sam'?s club|bj'?s wholesale/i;
+  const numOrNull = (v) => (v === null || v === undefined || v === "" || !isFinite(+v) ? null : +v);
+  const slug = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "store";
+  const TOWN = (Array.isArray(OFF.stores) ? OFF.stores : []).filter((s) => s && s.name).map((s, i) => {
+    const id = "oc-" + slug(s.id || s.name) + (s.id ? "" : "-" + i);
+    const rawType = String(s.store_type || "").toLowerCase();
+    const wholesale = rawType === "wholesale" || WHOLESALE_RE.test(s.name);
+    const type = wholesale ? "wholesale" : rawType === "grocery" || rawType === "convenience" ? rawType : "store";
+    const drinks = (Array.isArray(s.products) ? s.products : []).filter((p) => p && p.brand).map((p) => ({
+      brand: String(p.brand), product: String(p.product || p.brand),
+      size_oz: numOrNull(p.size_oz), pack_count: Math.max(1, parseInt(p.pack_count, 10) || 1),
+      price: numOrNull(p.price), verified: false, observed_at: String(p.last_updated || ""),
+    }));
+    return {
+      id, name: String(s.name), short: String(s.name), offcampus: true, wholesale,
+      membership: s.membership_required == null ? wholesale : !!s.membership_required,
+      address: String(s.address || ""), description: String(s.address || ""),
+      lat: numOrNull(s.lat), lng: numOrNull(s.lng), coord_source: "osm",
+      hours: s.hours && typeof s.hours === "object" ? s.hours : null, hours_text: String(s.hours_text || ""),
+      vendors: [{ id, name: String(s.name), type, hours: null, location_detail: "", drinks }],
+    };
+  });
+  const ALL_PLACES = DATA.buildings.concat(TOWN);
+  const placeById = (id) => ALL_PLACES.find((b) => b.id === id) || null;
+  const hasCoords = (b) => b.lat != null && b.lng != null;
+
   const state = {
     brand: null,        // selected brand filter, null = all
     openOnly: false,
@@ -17,16 +50,36 @@
     you: null,          // {lat, lng} once located
     sortKey: "price",
     sortDir: 1,
+    scope: "campus",    // "campus" buildings or "town" (off-campus stores)
     dash: false,        // dashboard view open?
-    reports: false,     // price reports view open?
+    reports: false,     // My reports view open?
   };
+  const places = () => (state.scope === "town" ? TOWN : DATA.buildings);
 
   // ---------------------------------------------------------------- helpers
   const $ = (sel) => document.querySelector(sel);
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const money = (n) => (typeof n === "number" ? "$" + n.toFixed(2) : "—");
-  const perOz = (d) => (d.price && d.size_oz ? d.price / d.size_oz : null);
+  /** Price per fluid ounce: price / total ounces (multipacks: count x ounces per can). */
+  const perOz = (d) => (d.price != null && d.size_oz ? d.price / (d.size_oz * (d.pack_count || 1)) : null);
+  const fmtPpo = (d) => (perOz(d) != null ? "$" + perOz(d).toFixed(3) + "/oz" : "—");
+  const sizeLabel = (d) => ((d.pack_count || 1) > 1 ? d.pack_count + " × " : "") + (d.size_oz != null ? d.size_oz + " oz" : "size unknown");
+  const parseWhen = (iso) => Date.parse(/^\d{4}-\d{2}-\d{2}$/.test(iso) ? iso + "T12:00:00" : String(iso).replace(" ", "T"));
+  /** "2026-11-07..." -> "Nov 7" (with the year when it isn't this year). */
+  function fmtUpdated(iso) {
+    const t = parseWhen(iso);
+    if (!iso || isNaN(t)) return iso ? String(iso) : "date unknown";
+    const d = new Date(t);
+    const sameYear = d.getFullYear() === new Date().getFullYear();
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: sameYear ? undefined : "numeric", timeZone: TZ });
+  }
+  const isStale = (iso) => { const t = parseWhen(iso); return !isNaN(t) && Date.now() - t > STALE_DAYS * 864e5; };
+  /** Off-campus value pill: price per ounce, e.g. "$0.104/oz". */
+  function valueTag(d) {
+    const p = perOz(d);
+    return p == null ? "—" : '<span class="price price-oz" aria-label="$' + p.toFixed(3) + ' per ounce">$' + p.toFixed(3) + '<span class="cents">/oz</span></span>';
+  }
   /** Price pill: "$2.50" with the cents set slightly smaller. */
   function priceTag(n, size) {
     if (typeof n !== "number") return "—";
@@ -35,27 +88,25 @@
       '<span class="cents">.' + c + "</span></span>";
   }
   const vendorLabel = (v) => v.label || v.name;
-  const TYPE_LABEL = { vending: "Vending machine", bookstore: "Bookstore", market: "Campus market", store: "Store" };
+  const TYPE_LABEL = {
+    vending: "Vending machine", bookstore: "Bookstore", market: "Campus market", store: "Store",
+    grocery: "Grocery store", convenience: "Convenience store", wholesale: "Wholesale club",
+  };
   const typeLabel = (t) => TYPE_LABEL[t] || t;
   /** data-tip attribute holding tooltip HTML (parts must already be escaped). */
   const tipAttr = (html) => ' data-tip="' + esc(html) + '"';
 
-  // ---------------------------------------------------------------- price reports: backend
-  // Who sees what:
-  //  * Everyone can SEND a report (the flag next to each price).
-  //  * Only signed-in team members see reports, "reported" tags, counts and the Reports page.
-  // Where reports live:
-  //  * Server mode (config.js reportsEndpoint set): the team's Google Sheet via Apps Script
-  //    (server/Code.gs). Reading/changing reports needs the team key, checked by the server.
-  //  * Local mode (no endpoint): this browser only - for trying the app out. Without a server
-  //    nothing can truly be private, so the sign-in there only hides the page.
+  // ---------------------------------------------------------------- price reports
+  // Anyone can report a price that looks wrong (the flag next to each price).
+  //  * Every report is kept in this browser, so people can look back at their own (My reports).
+  //  * When config.js has a reportsEndpoint, the report also goes to the team's Google Sheet through
+  //    Apps Script (server/Code.gs). The app never reads reports back; the team reads the Sheet.
   const CONFIG = window.APP_CONFIG || {};
   const ENDPOINT = String(CONFIG.reportsEndpoint || "").trim();
   const REMOTE = /^https:\/\//i.test(ENDPOINT);
   const KEYS = {
-    reports: "aggieEnergyMap.reports.v1",   // local mode only
-    outbox: "aggieEnergyMap.outbox.v1",     // server mode: reports waiting to be sent (offline)
-    team: "aggieEnergyMap.team.v1",         // server mode: the team key; local mode: true
+    mine: "tamuEnergize.myReports.v1",    // reports made in this browser
+    outbox: "aggieEnergyMap.outbox.v1",   // reports waiting to be sent (offline)
   };
   const store = {
     get(k, fallback) {
@@ -66,57 +117,31 @@
     },
     del(k) { try { localStorage.removeItem(k); } catch (e) { /* ignore */ } },
   };
-  store.del("aggieEnergyMap.priceUpdates.v1"); // older versions kept applied prices separately
-
   const asArray = (v) => (Array.isArray(v) ? v : []);
-  let teamKey = store.get(KEYS.team, null);
-  let reports = REMOTE ? [] : asArray(store.get(KEYS.reports, []));
-  let outbox = REMOTE ? asArray(store.get(KEYS.outbox, [])) : [];
-  const teamState = { loading: false, error: "", loadedAt: "" };
-  const isTeam = () => !!teamKey;
 
-  /** Stable id for one drink at one vendor, e.g. "msc-vend|Red Bull|8.4". */
-  const drinkKey = (v, d) => v.id + "|" + d.brand + "|" + d.size_oz;
-  const drinkIndex = {};
-  DATA.buildings.forEach((b) => b.vendors.forEach((v) => v.drinks.forEach((d) => { drinkIndex[drinkKey(v, d)] = { b, v, d }; })));
-  const findDrink = (key) => drinkIndex[key] || null;
-
-  // data.js values as loaded, so confirmed prices can be layered on (and taken off) cleanly.
-  const BASE = {};
-  for (const [key, f] of Object.entries(drinkIndex)) BASE[key] = { price: f.d.price, verified: f.d.verified, observed_at: f.d.observed_at };
-
-  /**
-   * Prices the team has confirmed but not yet published in data.js: key -> {price, observed_at, previous}.
-   * Shown in the app for signed-in team members only; the public always sees data.js.
-   * Once the exported data.js is committed, data.js already matches and the entry disappears.
-   * If data.js changed that price some other way since, data.js wins.
-   */
-  let updates = {};
-  function deriveUpdates() {
-    updates = {};
-    for (const [key, f] of Object.entries(drinkIndex)) Object.assign(f.d, BASE[key]);
-    if (!isTeam()) return;
-    const latest = {};
-    reports.forEach((r) => {
-      if (r.status !== "confirmed" || typeof r.confirmed_price !== "number") return;
-      if (!latest[r.key] || (r.resolved_at || "") > (latest[r.key].resolved_at || "")) latest[r.key] = r;
-    });
-    for (const [key, r] of Object.entries(latest)) {
-      const f = findDrink(key), base = BASE[key];
-      if (!f) continue;
-      if (base.price === r.confirmed_price && base.verified) continue;            // already published
-      if (base.price !== r.listed_price && base.price !== r.confirmed_price) continue; // data.js changed since
-      updates[key] = { price: r.confirmed_price, observed_at: r.resolved_at, previous: base };
-      Object.assign(f.d, { price: r.confirmed_price, verified: true, observed_at: r.resolved_at });
+  // Older versions kept test reports and a team key here: keep the reports, drop the rest.
+  (function migrateOldStorage() {
+    const old = asArray(store.get("aggieEnergyMap.reports.v1", []));
+    if (old.length) {
+      const list = asArray(store.get(KEYS.mine, []));
+      old.forEach((r) => list.push(Object.assign({}, r, { delivery: "saved" })));
+      store.set(KEYS.mine, list);
     }
+    ["aggieEnergyMap.reports.v1", "aggieEnergyMap.team.v1", "aggieEnergyMap.priceUpdates.v1"].forEach((k) => store.del(k));
+  })();
+
+  let mine = asArray(store.get(KEYS.mine, []));
+  let outbox = asArray(store.get(KEYS.outbox, []));
+  function saveMine() {
+    if (!store.set(KEYS.mine, mine)) toast("Couldn't save in this browser (private window?).");
   }
 
-  const openReportsFor = (key) => (isTeam() ? reports.filter((r) => r.key === key && r.status === "open") : []);
-
-  function saveLocal() {
-    if (REMOTE) return;
-    if (!store.set(KEYS.reports, reports)) toast("Couldn't save in this browser (private window?).");
-  }
+  /** Stable id for one drink at one vendor, e.g. "msc-vend|Red Bull|8.4" or "oc-heb|Monster|12x16". */
+  const drinkKey = (v, d) => v.id + "|" + d.brand + "|" + ((d.pack_count || 1) > 1 ? d.pack_count + "x" : "") + d.size_oz;
+  const drinkIndex = {};
+  ALL_PLACES.forEach((b) => b.vendors.forEach((v) => v.drinks.forEach((d) => { drinkIndex[drinkKey(v, d)] = { b, v, d }; })));
+  const findDrink = (key) => drinkIndex[key] || null;
+  const myReportsFor = (key) => mine.filter((r) => r.key === key);
 
   /** POST to the Apps Script endpoint. text/plain body avoids a CORS preflight. */
   async function api(payload) {
@@ -128,101 +153,41 @@
   }
   const isNetworkError = (e) => e instanceof TypeError || e.message === "bad_response";
 
-  /** Send one report. Returns "sent" | "queued" (offline, retried later) | "saved" (local mode). */
+  /** Keep a report in My reports and, with a server, send it. Returns "sent" | "queued" (offline) | "saved". */
   async function sendReport(r) {
-    if (!REMOTE) {
-      reports.push(Object.assign({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), created_at: campusIso(), status: "open", resolved_at: "", confirmed_price: null }, r));
-      saveLocal();
-      return "saved";
+    const entry = Object.assign({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), created_at: campusIso(), delivery: "saved" }, r);
+    if (REMOTE) {
+      try {
+        await api({ action: "report", report: r });
+        entry.delivery = "sent";
+      } catch (e) {
+        if (!isNetworkError(e)) throw e;
+        entry.delivery = "queued";
+        outbox.push(Object.assign({ local_id: entry.id }, r));
+        store.set(KEYS.outbox, outbox);
+      }
     }
-    try {
-      await api({ action: "report", report: r });
-      return "sent";
-    } catch (e) {
-      if (!isNetworkError(e)) throw e;
-      outbox.push(r);
-      store.set(KEYS.outbox, outbox);
-      return "queued";
-    }
+    mine.push(entry);
+    saveMine();
+    return entry.delivery;
   }
 
   async function flushOutbox() {
     if (!REMOTE || !outbox.length) return;
     const pending = outbox;
     outbox = [];
-    for (const r of pending) {
-      try { await api({ action: "report", report: r }); } catch (e) { if (isNetworkError(e)) outbox.push(r); }
+    for (const item of pending) {
+      const report = Object.assign({}, item);
+      delete report.local_id;
+      try {
+        await api({ action: "report", report });
+        const m = mine.find((x) => x.id === item.local_id);
+        if (m) m.delivery = "sent";
+      } catch (e) { if (isNetworkError(e)) outbox.push(item); }
     }
     store.set(KEYS.outbox, outbox);
-  }
-
-  /** Team only: load every report (server) or this browser's reports (local). */
-  async function refreshReports() {
-    if (!isTeam()) return;
-    if (!REMOTE) {
-      reports = asArray(store.get(KEYS.reports, []));
-      teamState.loadedAt = campusIso();
-      deriveUpdates();
-      return render();
-    }
-    teamState.loading = true;
-    teamState.error = "";
+    saveMine();
     render();
-    try {
-      const data = await api({ action: "list", key: teamKey });
-      reports = asArray(data.reports);
-      teamState.loadedAt = campusIso();
-    } catch (e) {
-      if (e.message === "unauthorized") {
-        signOut("The team key has changed. Please sign in again.");
-        return;
-      }
-      teamState.error = "Couldn't reach the reports server. Showing the last loaded reports.";
-    }
-    teamState.loading = false;
-    deriveUpdates();
-    render();
-  }
-
-  /** Change the status of every matching report for one drink (team only). */
-  async function setStatus(key, status, price) {
-    const from = status === "open" ? "confirmed" : "open";
-    const ids = reports.filter((r) => r.key === key && r.status === from).map((r) => r.id);
-    if (!ids.length) return false;
-    if (REMOTE) {
-      try {
-        await api({ action: "resolve", key: teamKey, ids, status, confirmed_price: price });
-      } catch (e) {
-        if (e.message === "unauthorized") signOut("The team key has changed. Please sign in again.");
-        else toast("Couldn't save the change. Check your connection and try again.");
-        return false;
-      }
-      await refreshReports();
-      return true;
-    }
-    const now = campusIso();
-    reports.forEach((r) => {
-      if (ids.indexOf(r.id) < 0) return;
-      r.status = status;
-      r.resolved_at = status === "open" ? "" : now;
-      r.confirmed_price = status === "confirmed" ? price : null;
-    });
-    saveLocal();
-    deriveUpdates();
-    render();
-    return true;
-  }
-
-  function signOut(message) {
-    teamKey = null;
-    store.del(KEYS.team);
-    if (REMOTE) reports = [];
-    teamState.loadedAt = "";
-    teamState.error = "";
-    teamState.loading = false;
-    deriveUpdates();
-    openOverlay(null);
-    toast(message || "Signed out of team view.");
   }
 
   /** Current campus time as "YYYY-MM-DDTHH:mm". */
@@ -249,9 +214,12 @@
       '" title="Report incorrect price" aria-label="Report incorrect price for ' + esc(d.brand + " " + d.size_oz + " oz at " + v.name) + '">' +
       FLAG_SVG + "</button></td>";
   }
+  /** "you reported" tag on drinks this browser has reported. */
   function reportedBadge(v, d) {
-    const n = openReportsFor(drinkKey(v, d)).length;
-    return n ? ' <span class="badge reported" title="' + n + ' open price report' + (n > 1 ? "s" : "") + '">reported</span>' : "";
+    const list = myReportsFor(drinkKey(v, d));
+    if (!list.length) return "";
+    const last = list[list.length - 1];
+    return ' <span class="badge reported" title="You reported ' + money(last.reported_price) + " on " + esc(fmtStamp(last.created_at)) + '">you reported</span>';
   }
 
   let toastTimer;
@@ -350,17 +318,18 @@
       Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLng / 2) ** 2;
     return 2 * R * Math.asin(Math.sqrt(x));
   }
-  function fmtDist(m) {
+  function fmtDist(m, byCar) {
     const mi = m / 1609.34;
+    if (byCar) return mi.toFixed(1) + " mi away";
     const walk = Math.max(1, Math.round(m / WALK_M_PER_MIN));
     return (mi < 0.1 ? Math.round(m * 3.281) + " ft" : mi.toFixed(2) + " mi") + " · ~" + walk + " min walk";
   }
 
   // ---------------------------------------------------------------- derived data
-  /** Flat list of every drink with its building and vendor. */
-  function allRows() {
+  /** Flat list of every drink with its place and vendor (defaults to the current scope). */
+  function allRows(list) {
     const rows = [];
-    for (const b of DATA.buildings) {
+    for (const b of list || places()) {
       for (const v of b.vendors) {
         const st = statusOf(vendorHours(b, v));
         for (const d of v.drinks) rows.push({ b, v, d, open: st.open, statusText: st.text });
@@ -371,21 +340,27 @@
 
   function brands() {
     const set = new Set();
-    DATA.buildings.forEach((b) => b.vendors.forEach((v) => v.drinks.forEach((d) => set.add(d.brand))));
+    places().forEach((b) => b.vendors.forEach((v) => v.drinks.forEach((d) => set.add(d.brand))));
     return [...set].sort((a, b) => a.localeCompare(b));
   }
 
-  /** Summary of one building under the current filters. */
+  /**
+   * Summary of one place under the current filters. On campus the headline drink is the cheapest;
+   * off campus, where multipacks are common, it is the best value by price per ounce.
+   */
   function summary(b) {
     let cheapest = null, count = 0, anyOpen = false;
+    const town = !!b.offcampus;
     for (const v of b.vendors) {
       const open = statusOf(vendorHours(b, v)).open;
       if (open) anyOpen = true;
       for (const d of v.drinks) {
         if (state.brand && d.brand !== state.brand) continue;
         if (state.openOnly && !open) continue;
+        if (d.price == null || (town && perOz(d) == null)) continue;
         count++;
-        if (!cheapest || d.price < cheapest.d.price) cheapest = { d, v };
+        const better = !cheapest || (town ? perOz(d) < perOz(cheapest.d) : d.price < cheapest.d.price);
+        if (better) cheapest = { d, v };
       }
     }
     return { cheapest, count, anyOpen, matches: count > 0 };
@@ -402,11 +377,11 @@
   }).addTo(map);
 
   const markers = {};
-  for (const b of DATA.buildings) {
+  for (const b of ALL_PLACES) {
+    if (!hasCoords(b)) continue; // off-campus stores the snapshot couldn't place stay list-only
     const m = L.marker([b.lat, b.lng], { icon: L.divIcon({ className: "pin-wrap", html: "", iconSize: [0, 0] }), title: b.name, keyboard: true });
     m.on("click", () => selectBuilding(b.id, false));
-    m.addTo(map);
-    markers[b.id] = m;
+    markers[b.id] = m; // added to the map by renderMarkers when its scope is showing
   }
 
   function syncZoomClass() {
@@ -420,14 +395,19 @@
   // The map is always draggable and zoomable. On narrow layouts it only takes part of the screen,
   // so the page still scrolls from the header and the list below it.
 
-  const campusBounds = L.latLngBounds(DATA.buildings.map((b) => [b.lat, b.lng])).pad(0.05);
+  /** Bounds of the pins in the current scope (campus when there's nothing off campus to show). */
+  function scopeBounds() {
+    let pts = places().filter(hasCoords).map((b) => [b.lat, b.lng]);
+    if (!pts.length) pts = DATA.buildings.map((b) => [b.lat, b.lng]);
+    return L.latLngBounds(pts).pad(0.05);
+  }
   function fitCampus() {
     map.invalidateSize();
     // Keep the pins clear of the floating header and side panel on wide screens.
     const pad = PHONE.matches
       ? { paddingTopLeft: [124, 40], paddingBottomRight: [96, 36] } // room for labels that hang beside their pin
       : { paddingTopLeft: [60, 60], paddingBottomRight: [60, 40] };
-    map.fitBounds(campusBounds, Object.assign({ maxZoom: 17, animate: false }, pad));
+    map.fitBounds(scopeBounds(), Object.assign({ maxZoom: 17, animate: false }, pad));
     syncZoomClass();
   }
   // The container may not have its final size yet (styles still loading), so fit once it does.
@@ -446,21 +426,27 @@
   }
 
   function renderMarkers() {
-    for (const b of DATA.buildings) {
+    const town = state.scope === "town";
+    for (const b of ALL_PLACES) {
+      const m = markers[b.id];
+      if (!m) continue;
+      if (!!b.offcampus !== town) { if (map.hasLayer(m)) m.remove(); continue; }
+      if (!map.hasLayer(m)) m.addTo(map);
       const s = summary(b);
       const cls = ["pin"];
       if (state.selected === b.id) cls.push("selected");
       if ((state.brand || state.openOnly) && !s.matches) cls.push("dim");
       if (b.coord_source !== "osm") cls.push("approx");
       if (b.label_dir && b.label_dir !== "top") cls.push("dir-" + b.label_dir);
-      const stores = [...new Set(b.vendors.map(vendorLabel))].join(" · ");
+      const sub = b.offcampus ? typeLabel(b.vendors[0].type) : [...new Set(b.vendors.map(vendorLabel))].join(" · ");
+      const price = s.cheapest ? (b.offcampus ? fmtPpo(s.cheapest.d) : money(s.cheapest.d.price)) : "";
       const html = '<div class="' + cls.join(" ") + '">' +
         '<div class="pin-row"><span class="dot ' + (s.anyOpen ? "open" : "closed") + '"></span>' +
         '<span class="pin-name">' + esc(b.short) + "</span>" +
-        (s.cheapest ? '<span class="pin-price">' + money(s.cheapest.d.price) + "</span>" : "") + "</div>" +
-        '<div class="pin-sub">' + esc(stores) + "</div></div>";
-      markers[b.id].setIcon(L.divIcon({ className: "pin-wrap", html, iconSize: [0, 0] }));
-      markers[b.id].setZIndexOffset(state.selected === b.id ? 1000 : 0);
+        (price ? '<span class="pin-price">' + price + "</span>" : "") + "</div>" +
+        '<div class="pin-sub">' + esc(sub) + "</div></div>";
+      m.setIcon(L.divIcon({ className: "pin-wrap", html, iconSize: [0, 0] }));
+      m.setZIndexOffset(state.selected === b.id ? 1000 : 0);
     }
   }
 
@@ -515,36 +501,51 @@
   $("#openNow").addEventListener("change", (e) => { state.openOnly = e.target.checked; render(); });
 
   // ---------------------------------------------------------------- panel: places list
+  const NOT_CONNECTED = '<div class="empty"><b>Off-campus prices aren\'t connected yet</b>Grocery, convenience and wholesale stores around College Station show up here once the Snowflake price snapshot has run.</div>';
+
   function renderPlaces() {
-    const items = DATA.buildings.map((b) => ({ b, s: summary(b), dist: state.you ? distanceM(state.you, b) : null }));
+    const town = state.scope === "town";
+    const list = places();
+    if (!list.length) {
+      $("#placesView").innerHTML = town ? NOT_CONNECTED : '<div class="empty"><b>No places yet</b></div>';
+      return;
+    }
+    const items = list.map((b) => ({ b, s: summary(b), dist: state.you && hasCoords(b) ? distanceM(state.you, b) : null }));
+    const val = (s) => (s.cheapest ? (town ? perOz(s.cheapest.d) : s.cheapest.d.price) : Infinity);
+    const far = (d) => (d == null ? Infinity : d);
     items.sort((x, y) => {
       if ((state.brand || state.openOnly) && x.s.matches !== y.s.matches) return x.s.matches ? -1 : 1;
       // A closed place can't sell you anything, however cheap: open places always come first.
       if (x.s.anyOpen !== y.s.anyOpen) return x.s.anyOpen ? -1 : 1;
-      if (state.you) return x.dist - y.dist;
-      const px = x.s.cheapest ? x.s.cheapest.d.price : Infinity;
-      const py = y.s.cheapest ? y.s.cheapest.d.price : Infinity;
-      return px - py || x.b.short.localeCompare(y.b.short);
+      if (state.you) return far(x.dist) - far(y.dist);
+      return val(x.s) - val(y.s) || x.b.short.localeCompare(y.b.short);
     });
 
     const hint = "Open now first, then " + (state.you ? "nearest" :
+      town ? "best value per ounce" + (state.brand ? " for " + esc(state.brand) : "") :
       state.brand ? "cheapest " + esc(state.brand) : "cheapest drink");
 
-    $("#placesView").innerHTML = '<p class="hint">' + items.length + " places · " + hint + "</p>" +
+    $("#placesView").innerHTML = '<p class="hint">' + items.length + (town ? " stores" : " places") + " · " + hint + "</p>" +
       items.map(({ b, s, dist }) => {
         const dim = (state.brand || state.openOnly) && !s.matches;
-        const price = s.cheapest
-          ? '<span class="price-big">' + priceTag(s.cheapest.d.price) + "</span>"
-          : '<span class="none">' + (state.brand ? "No " + esc(state.brand) : "—") + "</span>";
-        const cheapest = s.cheapest
-          ? "Cheapest: " + esc(s.cheapest.d.brand) + " " + s.cheapest.d.size_oz + " oz · " + esc(vendorLabel(s.cheapest.v))
-          : "";
+        const c = s.cheapest;
+        const price = c
+          ? '<span class="price-big">' + (town ? valueTag(c.d) : priceTag(c.d.price)) + "</span>"
+          : '<span class="none">' + (state.brand ? "No " + esc(state.brand) : town ? "No prices" : "—") + "</span>";
+        const line = !c ? ""
+          : town ? "Best value: " + esc(c.d.brand) + " " + esc(sizeLabel(c.d)) + " · " + money(c.d.price)
+          : "Cheapest: " + esc(c.d.brand) + " " + c.d.size_oz + " oz · " + esc(vendorLabel(c.v));
+        const sub = town ? esc(b.address || "Address not listed") : b.vendors.map((v) => esc(vendorLabel(v))).join(" · ");
+        const full = town ? esc(typeLabel(b.vendors[0].type)) : esc(b.name);
+        const closedText = town ? (b.hours ? "Closed now" : "Hours unknown") : "Nothing open right now";
         return '<button type="button" class="card' + (dim ? " dim" : "") + '" data-id="' + b.id + '">' +
-          '<div class="card-top"><div><span class="title">' + esc(b.short) + '</span><span class="full">' + esc(b.name) + "</span></div>" + price + "</div>" +
-          '<div class="stores">' + b.vendors.map((v) => esc(vendorLabel(v))).join(" · ") + "</div>" +
-          (cheapest ? '<div class="cheap">' + cheapest + "</div>" : "") +
-          '<div class="card-meta">' + statusPill(s.anyOpen ? { open: true, text: "Open now" } : { open: false, text: "Nothing open right now" }) +
-          (dist != null ? '<span class="dist">' + fmtDist(dist) + "</span>" : "") + "</div>" +
+          '<div class="card-top"><div><span class="title">' + esc(b.short) + '</span><span class="full">' + full + "</span></div>" + price + "</div>" +
+          '<div class="stores">' + sub + "</div>" +
+          (line ? '<div class="cheap">' + line + "</div>" : "") +
+          '<div class="card-meta">' + statusPill(s.anyOpen ? { open: true, text: "Open now" } : { open: false, text: closedText }) +
+          (town && b.wholesale ? '<span class="badge">' + (b.membership ? "Membership required" : "Wholesale") + "</span>" : "") +
+          (town && !hasCoords(b) ? '<span class="badge">Not on map</span>' : "") +
+          (dist != null ? '<span class="dist">' + fmtDist(dist, town) + "</span>" : "") + "</div>" +
           "</button>";
       }).join("");
   }
@@ -568,9 +569,47 @@
     return String(v.location_detail || "").replace(/\s*\((?:fill in|todo|tbd)[^)]*\)/gi, "").trim();
   }
 
+  const BACK_BTN = '<button type="button" class="back" id="backBtn"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M15 6l-6 6 6 6"/></svg>All places</button>';
+
+  /** Detail view for an off-campus store: one shelf, ranked by price per ounce. */
+  function renderTownDetail(b) {
+    const v = b.vendors[0];
+    const dir = "https://www.google.com/maps/dir/?api=1&travelmode=driving&destination=" +
+      (hasCoords(b) ? b.lat + "," + b.lng : encodeURIComponent(b.name + " " + b.address));
+    const ppoOf = (d) => (perOz(d) == null ? Infinity : perOz(d));
+    const drinks = v.drinks.filter((d) => !state.brand || d.brand === state.brand).slice().sort((a, c) => ppoOf(a) - ppoOf(c));
+    const best = drinks.find((d) => perOz(d) != null);
+    const updated = (d) => !d.observed_at ? '<span class="badge unverified">date unknown</span>'
+      : isStale(d.observed_at) ? '<span class="badge unverified" title="Last updated more than ' + STALE_DAYS + ' days ago">' + esc(fmtUpdated(d.observed_at)) + " · may be out of date</span>"
+      : '<span class="badge verified" title="When this price was last updated">' + esc(fmtUpdated(d.observed_at)) + "</span>";
+    const rows = drinks.map((d) => '<tr class="' + (d === best ? "best" : "") + '"><td><b>' + esc(d.brand) + '</b><span class="sm">' + esc(d.product) + "</span></td>" +
+      '<td class="num">' + esc(sizeLabel(d)) + "</td>" +
+      '<td class="num">' + (d.price != null ? priceTag(d.price, "sm") + '<span class="sm">' + fmtPpo(d) + "</span>" : '<span class="sm">Price unavailable</span>') + "</td>" +
+      '<td class="num">' + updated(d) + reportedBadge(v, d) + "</td>" + flagCell(v, d) + "</tr>").join("");
+
+    $("#detailView").innerHTML = '<div class="detail">' + BACK_BTN +
+      "<h2>" + esc(b.name) + "</h2>" +
+      '<p class="desc">' + esc(b.address || "Address not listed") + "</p>" +
+      '<div class="detail-actions"><span class="badge">' + esc(typeLabel(v.type)) + "</span>" +
+      (b.hours ? statusPill(statusOf(b.hours), "Store") : '<span class="status closed"><span class="dot closed"></span>Hours unknown</span>') +
+      '<a class="link-btn" href="' + dir + '" target="_blank" rel="noopener">Directions</a>' +
+      (state.you && hasCoords(b) ? '<span class="dist">' + fmtDist(distanceM(state.you, b), true) + "</span>" : "") + "</div>" +
+      (b.wholesale ? '<div class="note"><b>Wholesale club.</b> ' + (b.membership ? "You need a membership to buy here. " : "") + "Most prices are for multipacks, so compare them by price per ounce.</div>" : "") +
+      (!hasCoords(b) ? '<div class="note">This store couldn\'t be placed on the map from its address.</div>' : "") +
+      '<div class="section-title">Energy drinks' + (state.brand ? " · " + esc(state.brand) : "") + "</div>" +
+      (drinks.length
+        ? '<div class="vendor"><table><thead><tr><th>Drink</th><th class="num">Size</th><th class="num">Price</th><th class="num">Updated</th><th><span class="sr-only">Report</span></th></tr></thead><tbody>' + rows + "</tbody></table></div>"
+        : '<div class="hint">' + (state.brand ? "No " + esc(state.brand) + " here." : "No energy drink prices for this store yet.") + "</div>") +
+      '<div class="section-title">Store hours</div>' +
+      (b.hours ? hoursTable(b.hours) : '<p class="desc">' + (b.hours_text ? esc(b.hours_text) : "Hours aren't available for this store yet.") + "</p>") +
+      "</div>";
+    $("#backBtn").addEventListener("click", () => { state.selected = null; render(); });
+  }
+
   function renderDetail() {
-    const b = DATA.buildings.find((x) => x.id === state.selected);
+    const b = placeById(state.selected);
     if (!b) return;
+    if (b.offcampus) return renderTownDetail(b);
     const allConfirmed = b.vendors.every((v) => v.drinks.every((d) => d.verified));
     const dir = "https://www.google.com/maps/dir/?api=1&travelmode=walking&destination=" + b.lat + "," + b.lng;
 
@@ -619,25 +658,37 @@
   }
 
   function selectBuilding(id, pan) {
+    const b = placeById(id);
+    if (!b) return;
+    const scope = b.offcampus ? "town" : "campus";
+    const switched = scope !== state.scope;
+    if (switched) setScope(scope, true);
     state.selected = id;
     state.tab = "places";
-    const b = DATA.buildings.find((x) => x.id === id);
-    if (pan && b) map.flyTo([b.lat, b.lng], Math.max(map.getZoom(), 17), { duration: 0.6 });
     render();
+    if (pan && hasCoords(b)) map.flyTo([b.lat, b.lng], Math.max(map.getZoom(), 17), { duration: 0.6 });
+    else if (switched) fitCampus();
     $("#detailView").scrollTop = 0;
     if (PHONE.matches) $("#detailView").scrollIntoView({ behavior: "smooth" });
   }
 
   // ---------------------------------------------------------------- panel: compare
   function renderCompare() {
+    const town = state.scope === "town";
     const rows = allRows().filter((r) => (!state.brand || r.d.brand === state.brand) && (!state.openOnly || r.open));
+    if (!rows.length) {
+      $("#compareView").innerHTML = town && !TOWN.length ? NOT_CONNECTED
+        : '<div class="empty"><b>Nothing matches</b>Try another brand, or turn off Open now.</div>';
+      return;
+    }
+    const big = (x) => (x == null ? Infinity : x);
     const key = {
       brand: (r) => r.d.brand + r.d.product,
-      size: (r) => r.d.size_oz,
-      price: (r) => r.d.price,
-      ppo: (r) => perOz(r.d) || Infinity,
+      size: (r) => (r.d.size_oz || 0) * (r.d.pack_count || 1),
+      price: (r) => big(r.d.price),
+      ppo: (r) => big(perOz(r.d)),
       place: (r) => r.b.short + r.v.name,
-      dist: (r) => (state.you ? distanceM(state.you, r.b) : 0),
+      dist: (r) => (state.you && hasCoords(r.b) ? distanceM(state.you, r.b) : Infinity),
     }[state.sortKey];
     rows.sort((a, b) => {
       const x = key(a), y = key(b);
@@ -646,23 +697,26 @@
     const head = (k, label, num) =>
       '<th class="' + (num ? "num" : "") + '"><button type="button" data-sort="' + k + '">' + label +
       (state.sortKey === k ? (state.sortDir === 1 ? " ↑" : " ↓") : "") + "</button></th>";
+    const note = town ? "prices from each store's latest data"
+      : rows.every((r) => !r.d.verified) ? "prices not confirmed in person yet"
+      : rows.some((r) => !r.d.verified) ? "unmarked prices not confirmed yet" : "";
 
     $("#compareView").innerHTML =
-      '<p class="hint">' + rows.length + " drinks · " +
-      (rows.every((r) => !r.d.verified) ? "prices not confirmed in person yet · "
-        : rows.some((r) => !r.d.verified) ? "unmarked prices not confirmed yet · " : "") +
-      "tap a row to see it on the map · tap a column to sort</p>" +
+      '<p class="hint">' + rows.length + " drinks · " + (note ? note + " · " : "") + "tap a row to see it on the map · tap a column to sort</p>" +
       '<table class="compare"><thead><tr>' + head("brand", "Drink") + head("size", "oz", 1) + head("price", "Price", 1) +
       head("ppo", "$/oz", 1) + head("place", "Where") + (state.you ? head("dist", "Dist", 1) : "") + '<th><span class="sr-only">Report</span></th></tr></thead><tbody>' +
       rows.map((r) => {
         const ppo = perOz(r.d);
+        const tag = town
+          ? (r.d.observed_at && isStale(r.d.observed_at) ? ' · <span class="badge unverified">may be out of date</span>' : "")
+          : (r.d.verified ? ' · <span class="badge verified">confirmed</span>' : "");
         return '<tr data-id="' + r.b.id + '"><td><b>' + esc(r.d.brand) + "</b>" +
-          '<span class="sm">' + esc(r.d.product) + (r.d.verified ? ' · <span class="badge verified">confirmed</span>' : "") + reportedBadge(r.v, r.d) + "</span></td>" +
-          '<td class="num">' + esc(r.d.size_oz) + "</td>" +
+          '<span class="sm">' + esc(r.d.product) + tag + reportedBadge(r.v, r.d) + "</span></td>" +
+          '<td class="num">' + ((r.d.pack_count || 1) > 1 ? r.d.pack_count + "×" : "") + esc(r.d.size_oz == null ? "?" : r.d.size_oz) + "</td>" +
           '<td class="num"><b>' + money(r.d.price) + "</b></td>" +
-          '<td class="num">' + (ppo ? ppo.toFixed(3) : "—") + "</td>" +
-          "<td><b>" + esc(r.b.short) + '</b><span class="where"><span class="dot ' + (r.open ? "open" : "closed") + '"></span>' + esc(vendorLabel(r.v)) + "</span></td>" +
-          (state.you ? '<td class="num">' + (distanceM(state.you, r.b) / 1609.34).toFixed(2) + " mi</td>" : "") +
+          '<td class="num">' + (ppo != null ? ppo.toFixed(3) : "—") + "</td>" +
+          "<td><b>" + esc(r.b.short) + '</b><span class="where"><span class="dot ' + (r.open ? "open" : "closed") + '"></span>' + esc(town ? typeLabel(r.v.type) : vendorLabel(r.v)) + "</span></td>" +
+          (state.you ? '<td class="num">' + (hasCoords(r.b) ? (distanceM(state.you, r.b) / 1609.34).toFixed(2) + " mi" : "—") + "</td>" : "") +
           flagCell(r.v, r.d) + "</tr>";
       }).join("") + "</tbody></table>";
   }
@@ -686,65 +740,73 @@
   }));
 
   function renderHeader() {
-    const rows = allRows();
-    const ok = rows.filter((r) => r.d.verified).length;
     const pill = $("#verifiedCount");
-    pill.textContent = ok ? ok + "/" + rows.length + " prices confirmed" : "Prices not yet confirmed";
-    pill.classList.toggle("done", ok === rows.length);
-    // Reports are team-only: hide the button, count and tags from the public.
-    $("#reportsBtn").hidden = !isTeam();
-    $("#teamLink").textContent = isTeam() ? "Team: open Reports" : "Team sign-in";
-    const openN = isTeam() ? reports.filter((r) => r.status === "open").length : 0;
+    if (state.scope === "town") {
+      const ok = OFF.meta && OFF.meta.status === "ok" && TOWN.length > 0;
+      pill.textContent = ok ? "Prices synced " + fmtUpdated(OFF.meta.generated_at) : "Off-campus prices not connected";
+      pill.title = ok ? "When the off-campus prices were last pulled from the data source" : "The Snowflake price snapshot hasn't run yet";
+      pill.classList.toggle("done", !!ok);
+    } else {
+      const rows = allRows(DATA.buildings);
+      const ok = rows.filter((r) => r.d.verified).length;
+      pill.textContent = ok ? ok + "/" + rows.length + " prices confirmed" : "Prices not yet confirmed";
+      pill.title = "How many on-campus prices the team has checked in person";
+      pill.classList.toggle("done", ok === rows.length);
+    }
+    document.querySelectorAll("[data-scope]").forEach((b) => {
+      const on = b.dataset.scope === state.scope;
+      b.classList.toggle("active", on);
+      b.setAttribute("aria-selected", on);
+    });
+    $(".scope").dataset.active = state.scope;
+    const n = mine.length;
     const count = $("#reportsCount");
-    count.textContent = openN;
-    count.hidden = !openN;
-    $("#reportsBtn").title = openN ? openN + " open price report" + (openN > 1 ? "s" : "") + " to investigate" : "Price reports to investigate";
+    count.textContent = n;
+    count.hidden = !n;
+    $("#reportsBtn").title = n ? n + " price report" + (n > 1 ? "s" : "") + " you've sent" : "Price reports you've sent";
     const { day, minute } = campusNow();
     $("#clock").textContent = DAY_NAMES[day].slice(0, 3) + " " + fmtMin(minute) + " campus time";
   }
 
-  function exportCsv() {
-    const cols = ["building_id", "building", "vendor", "vendor_type", "location_detail", "brand", "product",
-      "size_oz", "price_usd", "price_per_oz", "verified", "observed_at", "lat", "lng"];
-    const q = (v) => {
-      const s = v == null ? "" : String(v);
-      return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
-    };
-    const lines = [cols.join(",")];
-    for (const r of allRows()) {
-      const ppo = perOz(r.d);
-      lines.push([r.b.id, r.b.name, r.v.name, r.v.type, r.v.location_detail, r.d.brand, r.d.product,
-        r.d.size_oz, r.d.price, ppo ? ppo.toFixed(4) : "", r.d.verified, r.d.observed_at, r.b.lat, r.b.lng].map(q).join(","));
-    }
-    downloadFile("aggie_energy_drinks.csv", lines.join("\n") + "\n", "text/csv");
+  /** Switch between campus buildings and off-campus stores. */
+  function setScope(scope, quiet) {
+    if (scope === state.scope) return;
+    state.scope = scope;
+    state.selected = null;
+    state.sortKey = scope === "town" ? "ppo" : "price";
+    state.sortDir = 1;
+    if (state.brand && brands().indexOf(state.brand) < 0) state.brand = null;
+    mapTouched = false;
+    if (quiet) return;
+    render();
+    fitCampus();
   }
-
-  function downloadFile(name, text, type) {
-    const blob = new Blob([text], { type });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = name;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-  }
+  document.querySelectorAll("[data-scope]").forEach((btn) => btn.addEventListener("click", () => setScope(btn.dataset.scope)));
 
   // ---------------------------------------------------------------- price reports: form
   const dlg = $("#reportDialog");
   let reportingKey = null;
 
+  /** Highest believable price: single cans stay under $20, multipacks and wholesale can run higher. */
+  const maxPrice = (f) => ((f.d.pack_count || 1) > 1 || f.b.offcampus ? 150 : 20);
+
   function openReport(key) {
     const f = findDrink(key);
     if (!f) return;
     reportingKey = key;
-    const n = openReportsFor(key).length;
+    const prev = myReportsFor(key);
+    const last = prev[prev.length - 1];
     $("#reportTarget").innerHTML =
-      "<b>" + esc(f.d.brand) + " · " + esc(f.d.size_oz) + " oz</b><br>" + esc(f.v.name) + " · " + esc(f.b.name) +
+      "<b>" + esc(f.d.brand) + " · " + esc(sizeLabel(f.d)) + "</b><br>" +
+      esc(f.b.offcampus ? f.b.name + (f.b.address ? " · " + f.b.address : "") : f.v.name + " · " + f.b.name) +
       "<br>Listed price: <b>" + money(f.d.price) + "</b> " +
-      (f.d.verified ? '<span class="badge verified">verified ' + esc(fmtStamp(f.d.observed_at)) + "</span>" : '<span class="badge unverified">unverified</span>') +
-      (n ? '<span class="sm">' + n + " open report" + (n > 1 ? "s" : "") + " already filed for this drink</span>" : "");
+      (f.b.offcampus
+        ? '<span class="badge ' + (f.d.observed_at && !isStale(f.d.observed_at) ? "verified" : "unverified") + '">updated ' + esc(fmtUpdated(f.d.observed_at)) + "</span>"
+        : f.d.verified ? '<span class="badge verified">verified ' + esc(fmtStamp(f.d.observed_at)) + "</span>" : '<span class="badge unverified">unverified</span>') +
+      (last ? '<span class="sm">You reported this drink' + (prev.length > 1 ? " " + prev.length + " times, most recently" : "") +
+        " at " + money(last.reported_price) + " on " + esc(fmtStamp(last.created_at)) + "</span>" : "");
     $("#rpPrice").value = "";
+    $("#rpPrice").max = String(maxPrice(f));
     $("#rpNote").value = "";
     $("#rpInPerson").checked = true;
     $("#rpError").hidden = true;
@@ -762,8 +824,9 @@
     if (!f) return closeReport();
     const err = $("#rpError");
     const price = parseFloat($("#rpPrice").value);
-    if (!isFinite(price) || price < 0.25 || price > 20) {
-      err.textContent = "Enter the price you saw, between $0.25 and $20.00.";
+    const max = maxPrice(f);
+    if (!isFinite(price) || price < 0.25 || price > max) {
+      err.textContent = "Enter the price you saw, between $0.25 and $" + max.toFixed(2) + ".";
       err.hidden = false;
       $("#rpPrice").focus();
       return;
@@ -777,7 +840,8 @@
       vendor: f.v.name,
       brand: f.d.brand,
       size_oz: f.d.size_oz,
-      listed_price: BASE[reportingKey].price, // the published (data.js) price
+      pack_count: f.d.pack_count || 1,
+      listed_price: f.d.price,
       reported_price: Math.round(price * 100) / 100,
       in_person: $("#rpInPerson").checked,
       note: $("#rpNote").value.trim().slice(0, 200),
@@ -796,10 +860,10 @@
       submit.textContent = "Send report";
     }
     closeReport();
-    toast(result === "queued"
-      ? "You're offline. The report is saved and will be sent automatically."
-      : "Thanks! Your report was sent to the team for review.");
-    if (isTeam()) refreshReports();
+    toast(result === "queued" ? "You're offline. The report is saved and will be sent automatically."
+      : result === "sent" ? "Thanks! Your report was sent. You can find it under My reports."
+      : "Thanks! Your report is saved under My reports.");
+    render();
   });
 
   // Flag buttons can sit inside clickable rows, so catch them first (capture phase).
@@ -811,227 +875,57 @@
     openReport(btn.getAttribute("data-report"));
   }, true);
 
-  // ---------------------------------------------------------------- price reports: investigation
-  const median = (arr) => {
-    const s = arr.slice().sort((a, b) => a - b), n = s.length;
-    return n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2;
-  };
+  // ---------------------------------------------------------------- my reports
   const signed = (n) => (n > 0 ? "+" : n < 0 ? "−" : "±") + "$" + Math.abs(n).toFixed(2);
-  const signedPct = (n) => (n > 0 ? "+" : n < 0 ? "−" : "±") + Math.abs(n).toFixed(1) + "%";
-  const PRIO_LABEL = { high: "High", medium: "Medium", low: "Low" };
+  const DELIVERY = { sent: ["Sent", "verified"], queued: ["Waiting to send", "unverified"], saved: ["Saved on this device", ""] };
 
-  /**
-   * One item per drink with open reports, ranked for investigation.
-   * Priority: High = 3+ reports, or seen in person and off by 10%+;
-   *           Medium = 2 reports, off by 5%+, or seen in person; otherwise Low.
-   */
-  function investigationItems() {
-    const by = {};
-    reports.filter((r) => r.status === "open").forEach((r) => (by[r.key] = by[r.key] || []).push(r));
-    return Object.entries(by).map(([key, list]) => {
-      const f = findDrink(key);
-      if (!f) return null;
-      const reported = median(list.map((r) => r.reported_price));
-      const listed = f.d.price;
-      const diff = reported - listed;
-      const pct = listed ? (diff / listed) * 100 : 0;
-      const inPerson = list.filter((r) => r.in_person).length;
-      const latest = list.map((r) => r.created_at).sort().pop();
-      const level = list.length >= 3 || (inPerson && Math.abs(pct) >= 10) ? "high"
-        : list.length >= 2 || Math.abs(pct) >= 5 || inPerson ? "medium" : "low";
-      const score = { high: 3, medium: 2, low: 1 }[level] * 1000 + list.length * 50 + Math.abs(pct);
-      return { key, f, list, reported, listed, diff, pct, inPerson, latest, level, score };
-    }).filter(Boolean).sort((a, b) => b.score - a.score);
-  }
-
-  function appliedUpdates() {
-    return Object.entries(updates).map(([key, u]) => ({ key, u, f: findDrink(key) }))
-      .filter((x) => x.f).sort((a, b) => (b.u.observed_at || "").localeCompare(a.u.observed_at || ""));
-  }
-
-  async function applyUpdate(key, price) {
-    const f = findDrink(key);
-    if (!f || !isFinite(price) || price < 0.25 || price > 20) return toast("Enter a price between $0.25 and $20.00.");
-    price = Math.round(price * 100) / 100;
-    if (await setStatus(key, "confirmed", price)) {
-      toast(f.d.brand + " at " + (f.b.code || f.b.short) + " confirmed at " + money(price) + ". Download data.js to publish it.");
-    }
-  }
-
-  async function dismissReports(key) {
-    if (await setStatus(key, "dismissed")) toast("Report dismissed. The listed price stays.");
-  }
-
-  /** Undo a confirmation: its reports go back to "To investigate". */
-  async function revertUpdate(key) {
-    if (await setStatus(key, "open")) toast("Moved back to To investigate. Price shown is the published one again.");
-  }
-
-  function renderReports() {
-    const items = investigationItems();
-    const applied = appliedUpdates();
-    const open = reports.filter((r) => r.status === "open");
-    const dismissed = reports.filter((r) => r.status === "dismissed").sort((a, b) => String(b.resolved_at).localeCompare(String(a.resolved_at)));
-    const inPerson = open.filter((r) => r.in_person).length;
-
-    $("#reportsSource").textContent = (REMOTE
-      ? "Shared team reports from your reports server"
-      : "Local mode: reports from this browser only (set reportsEndpoint in config.js to share them with the team)") +
-      (teamState.loadedAt ? " · loaded " + fmtStamp(teamState.loadedAt) : "");
+  function renderMyReports() {
+    $("#reportsSource").textContent = REMOTE
+      ? "Reports you've sent from this browser. Each one also went to the TAMU Energize team. This list is saved only in this browser."
+      : "Reports you've made in this browser. They're saved only on this device.";
+    const queued = mine.filter((r) => r.delivery === "queued").length;
     const status = $("#reportsStatus");
-    status.hidden = !(teamState.loading || teamState.error || outbox.length);
-    status.textContent = teamState.loading ? "Loading reports…"
-      : teamState.error ? teamState.error
-      : outbox.length ? outbox.length + " report(s) from this device are waiting to be sent (offline)." : "";
-    $("#refreshReportsBtn").disabled = teamState.loading;
-    $("#dataJsBtn").disabled = !applied.length;
-    $("#dataJsBtn").title = applied.length ? "Download data.js with the confirmed prices, then replace the file in the repo"
-      : "Confirm at least one price first";
-    $("#copyReportBtn").disabled = $("#mdReportBtn").disabled = !items.length && !applied.length;
-
-    const kpi = (label, value, note) => '<div class="w w-3 kpi"><span class="kpi-label">' + label + '</span><span class="kpi-value">' + value +
-      '</span><span class="kpi-note">' + note + "</span></div>";
-
-    const rows = items.map((it) => {
-      const { f } = it;
-      const st = statusOf(vendorHours(f.b, f.v));
-      const values = it.list.map((r) => money(r.reported_price)).join(", ");
-      const notes = it.list.filter((r) => r.note).map((r) => "“" + esc(r.note) + "”").join("<br>");
-      return "<tr>" +
-        '<td><span class="prio ' + it.level + '">' + PRIO_LABEL[it.level] + "</span></td>" +
-        "<td><b>" + esc(f.d.brand) + '</b><span class="sm">' + esc(f.d.size_oz) + " oz · " + esc(f.d.product) + "</span></td>" +
-        '<td><b>' + esc(f.b.code || f.b.short) + "</b> · " + esc(vendorLabel(f.v)) + '<span class="sm">' + esc(f.v.location_detail) + "</span>" + statusPill(st) + "</td>" +
-        '<td class="num">' + money(it.listed) + '<span class="sm">' + (f.d.verified ? "verified" : "unverified") + "</span></td>" +
-        '<td class="num"><b>' + money(it.reported) + '</b><span class="sm">' + (it.list.length > 1 ? "median of " + values : "&nbsp;") + "</span></td>" +
-        '<td class="num chg ' + (it.diff > 0 ? "up" : it.diff < 0 ? "down" : "") + '">' + signed(it.diff) + '<span class="sm">' + signedPct(it.pct) + "</span></td>" +
-        "<td>" + it.list.length + " report" + (it.list.length > 1 ? "s" : "") + '<span class="sm">' + it.inPerson + " in person · " + esc(fmtStamp(it.latest)) + "</span></td>" +
-        '<td class="notes">' + (notes || '<span class="sm">—</span>') + "</td>" +
-        '<td><div class="resolve"><span class="money-input" title="Price confirmed on site"><span aria-hidden="true">$</span>' +
-        '<input type="number" step="0.01" min="0.25" max="20" value="' + it.reported.toFixed(2) + '" data-confirm-input="' + esc(it.key) + '" aria-label="Confirmed price"></span>' +
-        '<button type="button" class="btn btn-primary btn-sm" data-apply="' + esc(it.key) + '">Apply</button>' +
-        '<button type="button" class="btn btn-sm" data-dismiss="' + esc(it.key) + '">Dismiss</button></div></td>' +
-        "</tr>";
+    status.hidden = !queued;
+    status.textContent = queued ? queued + (queued > 1 ? " reports are" : " report is") + " waiting to send. They'll go automatically when you're back online." : "";
+    const list = mine.slice().sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+    const rows = list.map((r) => {
+      const f = findDrink(r.key);
+      const where = f ? (f.b.offcampus ? f.b.name : (f.b.code || f.b.short) + " · " + vendorLabel(f.v)) : [r.building, r.vendor].filter(Boolean).join(" · ");
+      const diff = typeof r.listed_price === "number" && typeof r.reported_price === "number" ? r.reported_price - r.listed_price : null;
+      const dl = DELIVERY[r.delivery] || DELIVERY.saved;
+      const size = ((r.pack_count || 1) > 1 ? r.pack_count + " × " : "") + r.size_oz + " oz";
+      return "<tr" + (f ? ' data-id="' + esc(f.b.id) + '"' : "") + "><td><b>" + esc(r.brand) + '</b><span class="sm">' + esc(size) + "</span></td>" +
+        "<td>" + esc(where) + "</td>" +
+        '<td class="num">' + money(r.listed_price) + "</td>" +
+        '<td class="num"><b>' + money(r.reported_price) + "</b></td>" +
+        '<td class="num chg ' + (diff > 0 ? "up" : diff < 0 ? "down" : "") + '">' + (diff == null ? "—" : signed(diff)) + "</td>" +
+        "<td>" + esc(fmtStamp(r.created_at)) + '<span class="sm">' + (r.in_person ? "Seen in person" : "Not seen in person") + "</span></td>" +
+        '<td class="notes">' + (r.note ? esc(r.note) : '<span class="sm">—</span>') + "</td>" +
+        '<td><span class="badge ' + dl[1] + '">' + dl[0] + "</span></td>" +
+        '<td class="num"><button type="button" class="btn btn-sm" data-forget="' + esc(r.id) + '">Remove</button></td></tr>';
     }).join("");
-
-    const appliedRows = applied.map(({ key, u, f }) => "<tr>" +
-      "<td><b>" + esc(f.d.brand) + '</b><span class="sm">' + esc(f.d.size_oz) + " oz</span></td>" +
-      "<td><b>" + esc(f.b.code || f.b.short) + "</b> · " + esc(vendorLabel(f.v)) + "</td>" +
-      '<td class="num">' + money(u.previous.price) + " → <b>" + money(u.price) + "</b></td>" +
-      '<td class="num chg ' + (u.price > u.previous.price ? "up" : u.price < u.previous.price ? "down" : "") + '">' + signed(u.price - u.previous.price) + "</td>" +
-      "<td>" + esc(fmtStamp(u.observed_at)) + "</td>" +
-      '<td class="num"><button type="button" class="btn btn-sm" data-revert="' + esc(key) + '" title="Undo the confirmation and investigate again">Undo</button></td></tr>').join("");
-
-    $("#reportsBody").innerHTML =
-      kpi("Open reports", open.length, open.length ? inPerson + " seen in person" : "Nothing waiting") +
-      kpi("Drinks to check", items.length, items.filter((i) => i.level === "high").length + " high priority") +
-      kpi("Confirmed updates", applied.length, applied.length ? "Waiting to be published" : "None yet") +
-      kpi("Dismissed", dismissed.length, "Listed price kept") +
-
-      '<div class="w w-12"><h3>To investigate</h3><p class="w-sub">Highest priority first. Check the price on site, adjust it if needed, then <b>Apply</b> to confirm it (the whole team sees it), or <b>Dismiss</b> if the listed price is right.</p>' +
-      (items.length
-        ? '<div class="table-wrap"><table><thead><tr><th>Priority</th><th>Drink</th><th>Where</th><th class="num">Listed</th><th class="num">Reported</th><th class="num">Change</th><th>Reports</th><th>Notes</th><th class="num">Resolve</th></tr></thead><tbody>' + rows + "</tbody></table></div>"
-        : '<div class="empty"><b>No open reports</b>Use the flag next to any price on the map, in Compare prices or in the Dashboard catalog to report it.</div>') +
-      "</div>" +
-
-      '<div class="w w-12"><h3>Confirmed, not yet published</h3><p class="w-sub">Team members see these prices in the app already; the public still sees the published price. Use <b>Download updated data.js</b> and commit it to the repo to publish them for everyone.</p>' +
-      (applied.length
-        ? '<div class="table-wrap"><table><thead><tr><th>Drink</th><th>Where</th><th class="num">Price</th><th class="num">Change</th><th>Confirmed</th><th></th></tr></thead><tbody>' + appliedRows + "</tbody></table></div>"
-        : '<div class="empty">No updates applied yet.</div>') +
-      "</div>" +
-
-      (dismissed.length
-        ? '<div class="w w-12"><details><summary>Dismissed reports (' + dismissed.length + ")</summary>" +
-          '<div class="table-wrap"><table><tbody>' + dismissed.map((r) => "<tr><td><b>" + esc(r.brand) + "</b> " + esc(r.size_oz) + " oz</td><td>" + esc(r.building) + " · " + esc(r.vendor) +
-            '</td><td class="num">reported ' + money(r.reported_price) + " vs " + money(r.listed_price) + "</td><td>" + esc(fmtStamp(r.created_at)) + "</td></tr>").join("") +
-          "</tbody></table></div></details></div>"
-        : "");
+    $("#reportsBody").innerHTML = '<div class="w w-12">' + (list.length
+      ? '<div class="table-wrap"><table><thead><tr><th>Drink</th><th>Where</th><th class="num">Listed</th><th class="num">You saw</th><th class="num">Change</th><th>When</th><th>Note</th><th>Status</th><th><span class="sr-only">Remove</span></th></tr></thead><tbody>' + rows + "</tbody></table></div>"
+      : '<div class="empty"><b>No reports yet</b>See a price that looks wrong? Tap the flag next to it on the map, in Compare prices or in the Dashboard catalog.</div>') + "</div>";
   }
 
   $("#reportsBody").addEventListener("click", (e) => {
-    const t = e.target.closest("[data-apply],[data-dismiss],[data-revert]");
-    if (!t) return;
-    if (t.dataset.apply) {
-      const input = $('[data-confirm-input="' + CSS.escape(t.dataset.apply) + '"]');
-      applyUpdate(t.dataset.apply, parseFloat(input && input.value));
-    } else if (t.dataset.dismiss) dismissReports(t.dataset.dismiss);
-    else if (t.dataset.revert) revertUpdate(t.dataset.revert);
-  });
-
-  /** Markdown investigation report: what to check, where, and what to change in data.js. */
-  function buildReportMd() {
-    const items = investigationItems();
-    const applied = appliedUpdates();
-    const open = reports.filter((r) => r.status === "open");
-    const cell = (s) => String(s).replace(/\|/g, "\\|");
-    const L = [];
-    L.push("# Price Change Investigation Report", "");
-    L.push("TAMU Energize · generated " + fmtStamp(campusIso()) + " (campus time, " + TZ + ")", "");
-    L.push("**" + open.length + " open report" + (open.length === 1 ? "" : "s") + "** on **" + items.length + " drink" + (items.length === 1 ? "" : "s") +
-      "** to check. **" + applied.length + " confirmed update" + (applied.length === 1 ? "" : "s") + "** ready to publish.", "");
-
-    if (items.length) {
-      L.push("## To investigate", "");
-      L.push("| # | Priority | Drink | Where | Listed | Reported | Change | Reports |", "|---|---|---|---|---:|---:|---:|---|");
-      items.forEach((it, i) => {
-        const f = it.f;
-        L.push("| " + (i + 1) + " | " + PRIO_LABEL[it.level] + " | " + cell(f.d.brand + " " + f.d.size_oz + " oz") + " | " +
-          cell((f.b.code || f.b.short) + " · " + vendorLabel(f.v)) + " | " + money(it.listed) + " | " + money(it.reported) + " | " +
-          signed(it.diff) + " (" + signedPct(it.pct) + ") | " + it.list.length + " (" + it.inPerson + " in person) |");
-      });
-      L.push("");
-      items.forEach((it, i) => {
-        const f = it.f;
-        const vh = vendorHours(f.b, f.v);
-        L.push("### " + (i + 1) + ". " + f.d.brand + " " + f.d.size_oz + " oz — " + (f.b.code || f.b.short) + " · " + f.v.name, "");
-        L.push("- **Where:** " + f.v.location_detail + " (" + f.b.name + ")");
-        L.push("- **Hours:** " + compressHours(vh).join("; ") + " — " + statusOf(vh).text + " as of this report");
-        L.push("- **Listed:** " + money(it.listed) + (f.d.verified ? " (verified " + fmtStamp(f.d.observed_at) + ")" : " (unverified)"));
-        L.push("- **Reported:** " + it.list.map((r) => money(r.reported_price) + (r.in_person ? " in person" : "") + ", " + fmtStamp(r.created_at)).join("; "));
-        const notes = it.list.filter((r) => r.note).map((r) => "“" + r.note + "”");
-        if (notes.length) L.push("- **Notes:** " + notes.join(" "));
-        L.push("- **Priority:** " + PRIO_LABEL[it.level] + " · median change " + signed(it.diff) + " (" + signedPct(it.pct) + ")");
-        L.push("- [ ] Checked on site — actual price: $______  by ______  at ______", "");
-      });
-    } else {
-      L.push("No open reports.", "");
+    const t = e.target.closest("[data-forget]");
+    if (t) {
+      const id = t.dataset.forget;
+      const r = mine.find((x) => x.id === id);
+      mine = mine.filter((x) => x.id !== id);
+      outbox = outbox.filter((x) => x.local_id !== id); // a removed report that hasn't gone out yet won't be sent
+      store.set(KEYS.outbox, outbox);
+      saveMine();
+      render();
+      toast(r && r.delivery === "sent" ? "Removed from My reports. The team still has the copy you sent." : "Removed from My reports.");
+      return;
     }
-
-    if (applied.length) {
-      L.push("## Confirmed updates to publish", "");
-      L.push("| Drink | Where | Old | New | Change | Confirmed |", "|---|---|---:|---:|---:|---|");
-      applied.forEach(({ u, f }) => L.push("| " + cell(f.d.brand + " " + f.d.size_oz + " oz") + " | " + cell((f.b.code || f.b.short) + " · " + vendorLabel(f.v)) +
-        " | " + money(u.previous.price) + " | " + money(u.price) + " | " + signed(u.price - u.previous.price) + " | " + fmtStamp(u.observed_at) + " |"));
-      L.push("", "**To publish:** on the Reports page click *Download updated data.js*, replace `aggie-energy-map/data.js` in the repo with it, and commit. " +
-        "Everyone using the app then sees the new prices.", "");
-    }
-    return L.join("\n");
-  }
-
-  $("#mdReportBtn").addEventListener("click", () => {
-    downloadFile("price-investigation-" + campusIso().slice(0, 10) + ".md", buildReportMd() + "\n", "text/markdown");
-  });
-  $("#copyReportBtn").addEventListener("click", () => {
-    const md = buildReportMd();
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(md).then(() => toast("Report copied. Paste it into a GitHub issue or team chat."),
-        () => downloadFile("price-investigation.md", md + "\n", "text/markdown"));
-    } else downloadFile("price-investigation.md", md + "\n", "text/markdown");
+    const row = e.target.closest("tr[data-id]");
+    if (row) { openOverlay(null); selectBuilding(row.dataset.id, true); }
   });
 
-  /** data.js with confirmed prices applied, ready to commit. */
-  function exportDataJs() {
-    const copy = JSON.parse(JSON.stringify(DATA));
-    copy.meta.last_updated = campusIso().slice(0, 10);
-    const n = Object.keys(updates).length;
-    const header = "/*\n * data.js - exported from TAMU Energize on " + campusIso() + " (campus time).\n" +
-      " * Includes " + n + " confirmed price update" + (n === 1 ? "" : "s") + " from price reports.\n" +
-      " * Field and hours formats: see README.md (Data dictionary).\n */\n";
-    downloadFile("data.js", header + "window.CAMPUS_DATA = " + JSON.stringify(copy, null, 2) + ";\n", "text/javascript");
-    toast("Downloaded data.js. Replace aggie-energy-map/data.js in the repo and commit.");
-  }
-  $("#dataJsBtn").addEventListener("click", exportDataJs);
-
-  $("#exportBtn").addEventListener("click", exportCsv);
   $("#locateBtn").addEventListener("click", locate);
 
   // ---------------------------------------------------------------- dashboard
@@ -1121,7 +1015,7 @@
   }
 
   function catalogTable() {
-    const rows = allRows();
+    const rows = allRows(DATA.buildings);
     const key = {
       code: (r) => (r.b.code || r.b.short) + String(r.d.price.toFixed(2)).padStart(6, "0"),
       venue: (r) => vendorLabel(r.v),
@@ -1147,7 +1041,7 @@
   }
 
   function renderDashboard() {
-    const rows = allRows();
+    const rows = allRows(DATA.buildings);
     const vendors = allVendors();
     const openVendors = vendors.filter((x) => x.st.open).length;
     const openBuildings = DATA.buildings.filter((b) => statusOf(b.hours).open).length;
@@ -1187,7 +1081,6 @@
 
   /** Show one full-screen overlay ("dash" | "reports") or none (null). */
   function openOverlay(name) {
-    if (name === "reports" && !isTeam()) return openTeamSignIn();
     state.dash = name === "dash";
     state.reports = name === "reports";
     hideTip();
@@ -1197,64 +1090,12 @@
   const openDashboard = (on) => openOverlay(on ? "dash" : null);
   $("#dashBtn").addEventListener("click", () => openOverlay("dash"));
   $("#dashClose").addEventListener("click", () => openOverlay(null));
-  $("#reportsBtn").addEventListener("click", () => { openOverlay("reports"); refreshReports(); });
+  $("#reportsBtn").addEventListener("click", () => openOverlay("reports"));
+  $("#myReportsLink").addEventListener("click", () => openOverlay("reports"));
   $("#reportsClose").addEventListener("click", () => openOverlay(null));
-  $("#refreshReportsBtn").addEventListener("click", () => refreshReports());
-  $("#signOutBtn").addEventListener("click", () => signOut());
-  $("#teamLink").addEventListener("click", () => {
-    if (isTeam()) { openOverlay("reports"); refreshReports(); } else openTeamSignIn();
-  });
-
-  // ---------------------------------------------------------------- team sign-in
-  const teamDlg = $("#teamDialog");
-  function openTeamSignIn() {
-    $("#teamKeyInput").value = "";
-    $("#teamError").hidden = true;
-    const note = $("#teamModeNote");
-    note.hidden = REMOTE;
-    note.textContent = "Local mode: no reports server is set up yet (see server/README.md), so reports only exist on this device and any key opens the page here.";
-    if (typeof teamDlg.showModal === "function") teamDlg.showModal(); else teamDlg.setAttribute("open", "");
-    setTimeout(() => $("#teamKeyInput").focus(), 30);
-  }
-  const closeTeam = () => (typeof teamDlg.close === "function" ? teamDlg.close() : teamDlg.removeAttribute("open"));
-  teamDlg.addEventListener("click", (e) => { if (e.target.closest("[data-close]") || e.target === teamDlg) closeTeam(); });
-
-  $("#teamForm").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const key = $("#teamKeyInput").value.trim();
-    const err = $("#teamError");
-    if (!key) { err.textContent = "Enter the team key."; err.hidden = false; return; }
-    if (REMOTE) {
-      const btn = $("#teamSubmit");
-      btn.disabled = true;
-      btn.textContent = "Checking…";
-      try {
-        const data = await api({ action: "list", key });   // the server checks the key
-        reports = asArray(data.reports);
-        teamState.loadedAt = campusIso();
-      } catch (ex) {
-        err.textContent = ex.message === "unauthorized" ? "That team key isn't right."
-          : ex.message === "server_not_configured" ? "The reports server has no TEAM_KEY set yet (see server/README.md)."
-          : "Couldn't reach the reports server. Check your connection.";
-        err.hidden = false;
-        return;
-      } finally {
-        btn.disabled = false;
-        btn.textContent = "Sign in";
-      }
-    }
-    teamKey = REMOTE ? key : true;
-    store.set(KEYS.team, teamKey);
-    closeTeam();
-    if (location.hash === "#team") history.replaceState(null, "", location.pathname + location.search);
-    deriveUpdates();
-    toast("Signed in. You can now see all price reports.");
-    openOverlay("reports");
-    if (!REMOTE) refreshReports();
-  });
 
   document.addEventListener("keydown", (e) => {
-    if (e.key !== "Escape" || document.getElementById("reportDialog").open || teamDlg.open) return; // dialogs handle their own Esc
+    if (e.key !== "Escape" || dlg.open) return; // the report dialog handles its own Esc
     if (state.dash || state.reports) openOverlay(null);
   });
 
@@ -1312,21 +1153,14 @@
     if (state.dash) renderDashboard();
     $("#reportsView").classList.toggle("hidden", !state.reports);
     $("#reportsBtn").setAttribute("aria-pressed", !!state.reports);
-    if (state.reports) renderReports();
+    if (state.reports) renderMyReports();
   }
 
-  deriveUpdates();
   render();
 
-  // Startup: send any reports queued while offline, load team reports, handle #team links.
-  (async () => {
-    await flushOutbox();
-    if (isTeam()) await refreshReports();
-    if (location.hash === "#team") {
-      if (isTeam()) openOverlay("reports"); else openTeamSignIn();
-    }
-  })();
-  window.addEventListener("online", () => { flushOutbox().then(() => isTeam() && refreshReports()); });
+  // Send any reports that were queued while offline.
+  flushOutbox();
+  window.addEventListener("online", () => { flushOutbox(); });
   // Keep open/closed status current without resetting an open detail view.
   setInterval(() => {
     renderHeader();
@@ -1336,5 +1170,5 @@
   }, 60 * 1000);
 
   // Exposed for quick testing in the console.
-  window.__energyMap = { statusOf, parseDay, campusNow, state, render, map, fitCampus, buildReportMd, openReport, isTeam, mode: REMOTE ? "server" : "local" };
+  window.__energyMap = { statusOf, parseDay, campusNow, state, render, map, fitCampus, openReport, setScope, TOWN, mode: REMOTE ? "server" : "local" };
 })();

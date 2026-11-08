@@ -1,59 +1,51 @@
 # TAMU Energize
 
-An interactive map of Texas A&M's main campus showing where to buy energy drinks, what each
-brand costs, where exactly it is inside the building, and whether it's open right now.
+An interactive map of energy drink prices in College Station. **On campus** it shows where to buy
+energy drinks at Texas A&M, what each brand costs, where exactly it is inside the building, and
+whether it's open right now. **Off campus** it shows grocery, convenience and wholesale stores around
+town, ranked by price per ounce.
+
+Live site: https://inayah-sudo.github.io/tamu-energize/
 
 Built for the TAMU Datathon **Build Your Own Dataset** challenge.
 
-> **Data source:** `data.js` holds the team's dataset from the Databricks dashboard export
-> (`campus_buildings` and `energy_drink_catalog`, 2026-11-07).
->
-> Each price stays marked `verified: false` until a team member confirms it on site.
-> The app marks unconfirmed prices once per building ("prices not confirmed") and tags each confirmed
-> price individually (see *Collecting the data*). Team notes in `location_detail` written as
-> "(fill in …)", "(todo …)" or "(tbd …)" are hidden from visitors but kept in the CSV and Reports page.
+> **Data sources**
+> - **On campus:** `data.js` holds the team's dataset from the Databricks dashboard export
+>   (`campus_buildings` and `energy_drink_catalog`, 2026-11-07). Each price stays marked
+>   `verified: false` until a team member confirms it on site; the app marks unconfirmed prices once
+>   per building ("prices not confirmed"). Team notes in `location_detail` written as "(fill in …)",
+>   "(todo …)" or "(tbd …)" are hidden from visitors.
+> - **Off campus:** `offcampus.js` is a scheduled snapshot of two Snowflake procedures,
+>   `GET_ENERGY_DRINK_PRICES` and `GET_STORE_HOURS` (see *Off-campus prices* below).
 
 ## Features
 
-- Campus map (OpenStreetMap) with labelled pins for MSC, Zachry, Evans, Commons, Pav, Polo and ILCB.
-  Each pin shows an open/closed dot and the cheapest drink there.
-- Click a building to see:
-  - building hours and each store or machine's hours, with today's row highlighted
-  - every vendor and where it is inside the building
-  - the drinks, sorted by price, with $/oz
-  - walking directions
-- Brand filter (Celsius, Monster, Red Bull, …). The map and list then show the cheapest price for that brand.
-- "Open now only" filter, worked out in campus time (America/Chicago), including hours past midnight.
-- **Compare prices** tab: every drink on campus in one sortable table (price, $/oz, size, place).
-- **Dashboard** (header button): the team's Databricks dashboard rebuilt inside the app, computed live from `data.js`. It has:
-  - counters for buildings, locations, brands and drink options, with how many are open now
-  - the Building & Venue Guide
-  - average price by building
-  - locations by venue type
-  - a sortable Energy Drink Catalog
-
-  Click any row or bar to jump to that building on the map.
+- **On campus / Off campus** switch at the top. Everything below follows it: map, list, filters and compare table.
+- Map (OpenStreetMap) with a labelled pin per place. Each pin shows an open/closed dot and the
+  cheapest drink there (on campus) or the best price per ounce (off campus).
+- Click a place to see:
+  - its hours, with today's row highlighted
+  - on campus: every vendor and where it is inside the building, with walking directions
+  - off campus: the address, store type, driving directions, and every drink ranked by price per ounce,
+    with when each price was last updated
+  - the drinks, with $/oz. Multipacks are priced per ounce as price / (count × oz per can).
+- **Wholesale clubs** (Costco, Sam's Club, …) are labelled, with a note that a membership is required.
+- Off-campus prices older than 14 days are marked "may be out of date"; a store with no price says so
+  instead of guessing.
+- Brand filter (Celsius, Monster, Red Bull, …) and an "Open now" filter, worked out in campus time
+  (America/Chicago), including hours past midnight.
+- **Compare prices** tab: every drink in one sortable table (price, $/oz, size, place).
+- **Dashboard** (header button): the team's Databricks dashboard for the on-campus data, rebuilt inside
+  the app and computed live from `data.js`. Click any row or bar to jump to that building on the map.
 - **Report a price** (flag next to every price): anyone can report a price that looks wrong.
-  - **Reporting:** they enter the price they saw, whether they saw it in person, and an optional note.
-  - **Reports page:** turns the reports into an investigation list.
-    - One row per drink, ranked by priority.
-    - Each row shows where to check, the hours, the listed vs reported price (median of all reports), and the change in $ and %.
-  - **Apply:** after checking on site, a team member clicks Apply. The new price shows everywhere in the app, marked verified with a timestamp.
-  - **Dismiss:** keeps the listed price instead.
-  - **Copy report** / **Download report (.md)** produce a write-up you can paste into a GitHub issue or team chat.
-  - **Download updated data.js** exports the confirmed prices, ready to commit.
-  - **Who sees reports:** visitors can only *send* reports. The Reports page, "reported" tags and counts are for signed-in team members only (**Team sign-in** at the bottom of the side panel, or `#team` in the URL).
-  - **Where reports live:** in a Google Sheet your team owns, through a small Google Apps Script. Setup takes about 5 minutes: see [`server/README.md`](server/README.md), then paste the web app URL into `config.js`.
-    - The server checks the team key before it shows or changes any report, so all team members see the same reports.
-    - Reports filed while offline are queued and sent automatically when the device reconnects.
-    - Without `config.js` set, the app runs in *local mode* (reports stay in that browser), which is only meant for trying it out.
-  - **Publishing:** confirmed prices appear for team members straight away. The public sees them once the exported `data.js` is committed.
-  - **Priority rules:**
-    - **High:** 3+ reports, or seen in person and off by 10% or more.
-    - **Medium:** 2 reports, off by 5% or more, or seen in person.
-    - **Low:** anything else.
-- **Near me**: uses your location to sort places by distance and estimate walking time.
-- **Export CSV**: downloads the full dataset as `aggie_energy_drinks.csv`.
+  - They enter the price they saw, whether they saw it in person, and an optional note.
+  - **My reports** (header button, or the link at the bottom of the side panel) lists the reports made
+    in that browser, with whether each was sent. Drinks you've reported get a "you reported" tag.
+    The list is kept in the browser's storage, so it's per device.
+  - If `config.js` has a `reportsEndpoint`, each report is also sent to a Google Sheet your team owns
+    (see [`server/README.md`](server/README.md)). Reports filed while offline are queued and sent
+    when the device reconnects. The team reviews reports in the Sheet; nobody can read them through the app.
+- **Near me**: uses your location to sort places by distance (walking time on campus, miles off campus).
 - Right-click (or long-press on a phone) the map to read coordinates for fixing a building's position.
 
 ## Run it
@@ -64,25 +56,65 @@ No build step and no dependencies to install. Leaflet loads from a CDN.
 - **"Near me" needs a server**, because browsers only allow location on `https` or `localhost`:
 
 ```bash
-cd aggie-energy-map
 python -m http.server 8000
 ```
 
 Then open http://localhost:8000.
 
-To host it free, push the folder to GitHub and turn on **GitHub Pages**
-(Settings → Pages → deploy from the main branch).
+The site is hosted free on **GitHub Pages** from the `main` branch.
+
+## Off-campus prices (Snowflake)
+
+The two procedures from `ENERGY_DRINK_PRICE_AGENT.agent.yaml` run inside a Snowflake warehouse, and
+calling them needs a Snowflake login. A public static site can't hold a secret, so the site never calls
+Snowflake itself. Instead:
+
+1. `.github/workflows/offcampus-snapshot.yml` runs every 6 hours (and on demand from the **Actions** tab).
+2. It runs `scripts/snapshot_offcampus.py`, which calls
+   `GET_ENERGY_DRINK_PRICES('ALL', <store type>)` for `GROCERY`, `CONVENIENCE` and `WHOLESALE`, and `GET_STORE_HOURS()`.
+3. The script joins prices to stores by store name and converts hours into the app's format. It also
+   looks up new store addresses on OpenStreetMap once, caching them in `scripts/store_coords.json`,
+   where you can fix a wrong pin by hand.
+4. If anything changed, the workflow commits `offcampus.js`, and GitHub Pages republishes the site.
+
+**Setup** (repo → Settings → Secrets and variables → Actions):
+
+| Name | Kind | What |
+|---|---|---|
+| `SNOWFLAKE_ACCOUNT` | secret | Account identifier, e.g. `myorg-myaccount` |
+| `SNOWFLAKE_USER` | secret | A user that can run both procedures (a dedicated service user is best) |
+| `SNOWFLAKE_WAREHOUSE` | secret | The warehouse from the agent file (`<WAREHOUSE>`) |
+| `SNOWFLAKE_PRIVATE_KEY` | secret | Key-pair login: the PEM private key (recommended) |
+| `SNOWFLAKE_PRIVATE_KEY_PASSPHRASE` | secret | Only if that key is encrypted |
+| `SNOWFLAKE_PASSWORD` | secret | Instead of a key: a password or programmatic access token |
+| `SNOWFLAKE_ROLE` | secret | Optional role to use |
+| `PRICES_PROCEDURE` | variable | Defaults to `MY_DB.PUBLIC.GET_ENERGY_DRINK_PRICES` |
+| `HOURS_PROCEDURE` | variable | Defaults to `MY_DB.PUBLIC.GET_STORE_HOURS` |
+
+Then open **Actions → Off-campus price snapshot → Run workflow**. Until the secrets exist, the job
+finishes with a notice and the site says off-campus prices aren't connected yet.
+
+**What the procedures should return.** Column names are matched case-insensitively.
+- Prices: `store`, `brand`, `product`, `size_oz`, `pack_count`, `price`, `last_updated`
+  (`price_per_oz` is recomputed in the app).
+- Hours: `store`, `address`, plus hours as either a column per day (`monday` … `sunday`, e.g.
+  `7:00 AM - 10:00 PM`, `Closed`, `Open 24 hours`), one row per store and `day` with
+  `open_time`/`close_time`, or a single `hours` value. Optional `store_type`, `lat`/`lng`.
+  Hours the script can't read are shown as text, without an open/closed status.
 
 ## Files
 
 | File | What it is |
 |---|---|
 | `index.html` | Page layout |
-| `styles.css` | Styling (maroon theme, responsive down to phone width) |
-| `app.js` | Map, filters, open/closed logic, compare table, CSV export |
-| `data.js` | **The dataset**: buildings, vendors, hours, drinks, prices |
+| `styles.css` | Styling (maroon and teal, responsive down to phone width) |
+| `app.js` | Map, filters, open/closed logic, compare table, price reports |
+| `data.js` | **On-campus dataset**: buildings, vendors, hours, drinks, prices |
+| `offcampus.js` | **Off-campus dataset**: Snowflake snapshot (generated, don't edit) |
 | `config.js` | Reports server URL (`reportsEndpoint`) |
-| `server/Code.gs` | Google Apps Script backend for team-only price reports |
+| `scripts/snapshot_offcampus.py` | Pulls the off-campus data from Snowflake |
+| `.github/workflows/offcampus-snapshot.yml` | Runs that script every 6 hours |
+| `server/Code.gs` | Google Apps Script that saves price reports to a Google Sheet |
 | `server/README.md` | 5-minute setup for the reports server |
 
 ## Data dictionary (`data.js`)
@@ -131,7 +163,6 @@ To host it free, push the folder to GitHub and turn on **GitHub Pages**
 3. **Hours:** copy from the posted sign at the door, or note where else they came from.
 4. **Entry:** update `data.js`, then set `verified: true` and `observed_at`.
    - The header counter shows how many prices are verified.
-   - Use **Export CSV** to save the dataset file for the repo.
 5. **Sample size:** _N_ locations, _N_ vendors, _N_ drink price observations.
 
 ## Limitations
@@ -142,8 +173,10 @@ To host it free, push the folder to GitHub and turn on **GitHub Pages**
 - **The Pavilion's map position was read off the OpenStreetMap map label**, because the building can't be looked up by name. Confirm it on site.
 - **Walking times** are straight-line distance at about 3 mph, not actual routes.
 - **Not complete:** only the buildings listed are covered, and other campus locations also sell energy drinks.
+- **Off-campus prices are only as fresh as the data source.** The site shows each price's last-updated date and the snapshot time; it doesn't check shelves itself.
+- **My reports are per browser.** Clearing site data or switching devices starts a fresh list.
 
 ## Credits
 
-Map tiles and building coordinates © OpenStreetMap contributors. Map library: Leaflet.
+Map tiles, building coordinates and store address lookups © OpenStreetMap contributors. Map library: Leaflet.
 Not affiliated with Texas A&M University or any brand shown.

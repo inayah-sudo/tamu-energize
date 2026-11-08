@@ -86,6 +86,23 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .topbar h1 span { color: var(--maroon); }
 .sub { margin: 0; font-size: 13px; color: var(--muted); white-space: nowrap; }
 .top-actions { display: flex; align-items: center; gap: 6px; }
+
+/* on campus / off campus: the one switch that changes what the whole app is showing */
+.scope {
+  position: relative; display: grid; grid-template-columns: 1fr 1fr; padding: 4px; min-width: 260px;
+  background: var(--surface); border-radius: var(--r-pill); box-shadow: var(--shadow-1);
+}
+.scope::before {
+  content: ""; position: absolute; top: 4px; bottom: 4px; left: 4px; width: calc(50% - 4px);
+  background: var(--maroon); border-radius: var(--r-pill); transition: transform var(--base) var(--ease);
+}
+.scope[data-active="town"]::before { transform: translateX(100%); }
+.scope-btn {
+  position: relative; z-index: 1; border: 0; background: transparent; padding: 7px 16px; border-radius: var(--r-pill);
+  font-size: 14px; font-weight: 600; color: var(--ink-2); white-space: nowrap; transition: color var(--base) var(--ease);
+}
+.scope-btn.active { color: #fff; }
+.scope-btn:hover:not(.active) { color: var(--maroon); }
 .topbar .btn { background: transparent; border-color: transparent; box-shadow: none; }
 .topbar .btn:hover { background: var(--surface); box-shadow: var(--shadow-1); }
 .topbar .btn[aria-pressed="true"] { background: var(--maroon); color: #fff; }
@@ -198,6 +215,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .price .cents { font-size: .78em; }
 .price.price-sm { font-size: 14px; padding: 3px 9px; }
+.price.price-oz { font-size: 15px; }
+.price.price-oz .cents { font-weight: 600; }
 
 /* ---------------------------------------------------------------- place rows */
 .card {
@@ -241,7 +260,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .badge.unverified { background: var(--maroon-tint); color: var(--maroon); }
 .badge.verified { background: var(--teal-tint); color: var(--teal); }
-.badge.reported { background: var(--danger); color: #fff; }
+.badge.reported { background: var(--maroon); color: #fff; }
+.view > .empty { padding: 28px 12px; }
 
 .note { font-size: 13.5px; background: var(--maroon-tint); color: var(--ink); padding: 10px 14px; margin: 12px 0; border-radius: var(--r-md); }
 
@@ -528,7 +548,8 @@ td.act { width: 36px; text-align: right; padding-left: 0; }
 }
 @media (max-width: 820px) {
   .app { height: auto; min-height: 100%; padding: 0 0 16px; gap: 0; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto auto; }
-  .topbar { position: sticky; top: 0; z-index: 1000; background: var(--bg); padding: 10px 12px; }
+  .topbar { position: sticky; top: 0; z-index: 1000; background: var(--bg); padding: 10px 12px; flex-wrap: wrap; row-gap: 10px; }
+  .scope { order: 3; flex: 1 1 100%; min-width: 0; }
   .topbar h1 { font-size: 22px; }
   .topbar .pill { display: none; }
   #map { grid-column: 1; grid-row: 2; height: 46vh; min-height: 300px; margin: 0 12px; }

@@ -1,10 +1,14 @@
 # Reports server setup (Google Sheet + Apps Script)
 
-This makes price reports **private to your team** and **shared between team members**.
+This sends every price report from the app to a **Google Sheet your team owns**.
 
-- **Anyone** using the app can send a report. Visitors can't see any reports, not even their own.
-- **Team members** sign in once per device with the team key. They then all see the same reports in the app's Reports page.
-- **Reports live in a Google Sheet** you own. Share it only with your team, and you can open it directly too.
+- **Anyone** using the app can send a report. Each visitor also sees the reports they've made on the
+  app's **My reports** page; that list is kept in their own browser.
+- **Nobody can read reports back through the app.** The script only accepts new reports. Your team
+  reviews them in the Sheet itself.
+
+Without this server, reports still work: they're saved under My reports on that device, but nobody
+else ever sees them.
 
 Takes about 5 minutes. Do this with the Google account that should own the data.
 
@@ -14,26 +18,17 @@ Takes about 5 minutes. Do this with the Google account that should own the data.
 2. In the sheet: **Extensions → Apps Script**.
 3. Delete what's in `Code.gs`, paste in the contents of [`Code.gs`](Code.gs), and click **Save**.
 
-## 2. Set the team key
-
-1. In Apps Script: **Project Settings** (gear icon) → **Script Properties** → **Add script property**.
-2. Property: `TEAM_KEY`. Value: a long passphrase only your team knows, e.g. four random words.
-3. Save. Share the key with your team privately (not in the repo, not in the README).
-
-To revoke access later, change the value. Everyone then has to sign in again with the new key.
-
-## 3. Deploy it as a web app
+## 2. Deploy it as a web app
 
 1. **Deploy → New deployment** → type **Web app**.
 2. **Execute as:** *Me*. **Who has access:** *Anyone*.
-   - "Anyone" is needed so visitors can send reports.
-   - Reading or changing reports still requires the team key, which the script checks on every request.
+   - "Anyone" is needed so visitors can send reports. The script can only add rows; it can't show or change them.
 3. Click **Deploy** and approve the permissions. The script only touches this one spreadsheet.
 4. Copy the **Web app URL**. It ends in `/exec`.
 
-## 4. Connect the app
+## 3. Connect the app
 
-Open `aggie-energy-map/config.js` and paste the URL:
+Open `config.js` and paste the URL:
 
 ```js
 window.APP_CONFIG = {
@@ -41,15 +36,15 @@ window.APP_CONFIG = {
 };
 ```
 
-Commit and push. The URL is fine to make public, because it can only accept reports without the key.
+Commit and push. The URL is fine to make public, because it can only accept new reports.
 
-## 5. Sign in as a team member
+## Working through reports
 
-On each team device:
-1. Open the app and tap **Team sign-in** at the bottom of the side panel, or add `#team` to the URL.
-2. Enter the team key.
-
-The **Reports** button then appears with everyone's reports.
+Each report is a row in the **Reports** tab: when it came in, which drink (`key` is
+building-or-store id | brand | size), the listed price, the price the visitor saw, whether they saw it
+in person, and their note. To publish a corrected on-campus price, update `data.js` (set the price,
+`verified: true` and `observed_at`) and commit. Off-campus prices come from Snowflake, so fix those
+at the source.
 
 ## Updating the script later
 
@@ -57,6 +52,8 @@ After editing `Code.gs`, use **Deploy → Manage deployments → Edit (pencil) �
 
 ## Limits
 
-- **Spam:** at most 60 reports are accepted per 10 minutes across the whole app. Notes are capped at 200 characters, and nothing that would run as a spreadsheet formula is stored.
-- **Shared key:** the team key is one shared passphrase, not individual logins. Anyone who has it can review reports, so change it if it leaks.
-- **Key on devices:** a signed-in device keeps the key in that browser's storage until someone clicks **Sign out** on the Reports page.
+- **Spam:** at most 60 reports are accepted per 10 minutes across the whole app. Notes are capped at
+  200 characters, and nothing that would run as a spreadsheet formula is stored.
+- **Older sheets:** the columns changed from the earlier team-review version (a `pack_count`
+  column was added, and the review columns were removed). If you set up a sheet with that version,
+  rename its **Reports** tab and the script will start a fresh one with the new columns.
