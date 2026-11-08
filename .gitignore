@@ -1,0 +1,12 @@
+# OS and editor files
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+
+# Local tool state
+.impeccable/config.local.json
+.impeccable/review/
+.impeccable/build/
+.claude/settings.local.json

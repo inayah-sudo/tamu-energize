@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>TAMU Energize</title>
+  <meta name="description" content="Interactive Texas A&M campus map of energy drink prices, locations and hours.">
+  <meta name="theme-color" content="#f3f2f5">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,400..800&family=JetBrains+Mono:wght@400;500&display=swap">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app">
+    <div id="map" aria-label="Campus map"></div>
+
+    <header class="topbar">
+      <div class="brand">
+        <h1>TAMU <span>Energize</span></h1>
+        <p class="sub">Campus price index · College Station, TX</p>
+      </div>
+      <div class="top-actions">
+        <span id="verifiedCount" class="pill" title="How many prices have been confirmed on site"></span>
+        <button id="dashBtn" class="btn" type="button" title="Charts and tables for the whole dataset">
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+          <span>Dashboard</span>
+        </button>
+        <button id="reportsBtn" class="btn" type="button" title="Price reports to investigate" hidden>
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M5 21V4m0 0h11l-2 4 2 4H5"/></svg>
+          <span>Reports</span>
+          <b id="reportsCount" class="count" hidden></b>
+        </button>
+        <button id="locateBtn" class="btn" type="button" title="Sort by distance from you">
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="6" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="2" fill="currentColor"/></svg>
+          <span>Near me</span>
+        </button>
+        <button id="exportBtn" class="btn" type="button" title="Download the dataset as CSV">
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 4v11m0 0-4-4m4 4 4-4M5 20h14"/></svg>
+          <span>CSV</span>
+        </button>
+      </div>
+    </header>
+
+    <aside class="panel">
+      <div class="panel-head">
+        <div class="tabs" role="tablist" data-active="places">
+          <button class="tab active" data-tab="places" role="tab" aria-selected="true">Places</button>
+          <button class="tab" data-tab="compare" role="tab" aria-selected="false">Compare prices</button>
+        </div>
+        <div id="brandChips" class="chips" aria-label="Filter by brand"></div>
+        <div class="filter-row">
+          <label class="switch">
+            <input type="checkbox" id="openNow">
+            <span class="track" aria-hidden="true"></span>
+            Open now
+          </label>
+          <span id="clock" class="clock"></span>
+        </div>
+      </div>
+
+      <section id="placesView" class="view"></section>
+      <section id="detailView" class="view hidden"></section>
+      <section id="compareView" class="view hidden"></section>
+      <div class="panel-foot">
+        <span>See a wrong price? Tap the flag next to it.</span>
+        <button id="teamLink" class="linklike" type="button">Team sign-in</button>
+      </div>
+    </aside>
+
+    <section id="dashboard" class="dash hidden" aria-label="Dashboard">
+      <div class="dash-inner">
+        <div class="dash-head">
+          <div>
+            <h2>Campus buildings &amp; energy drinks</h2>
+            <p id="dashSource" class="dash-source"></p>
+          </div>
+          <button id="dashClose" class="btn" type="button">
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M15 6l-6 6 6 6"/></svg>
+            Back to map
+          </button>
+        </div>
+        <div id="dashBody" class="dash-grid"></div>
+      </div>
+    </section>
+
+    <section id="reportsView" class="dash hidden" aria-label="Price reports">
+      <div class="dash-inner">
+        <div class="dash-head">
+          <div>
+            <h2>Price reports to check</h2>
+            <p id="reportsSource" class="dash-source"></p>
+          </div>
+          <div class="head-actions">
+            <button id="refreshReportsBtn" class="btn" type="button">Refresh</button>
+            <button id="copyReportBtn" class="btn" type="button">Copy report</button>
+            <button id="mdReportBtn" class="btn" type="button">Download report (.md)</button>
+            <button id="dataJsBtn" class="btn btn-primary" type="button">Download updated data.js</button>
+            <button id="reportsClose" class="btn" type="button">
+              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M15 6l-6 6 6 6"/></svg>
+              Back to map
+            </button>
+            <button id="signOutBtn" class="btn" type="button">Sign out</button>
+          </div>
+        </div>
+        <div id="reportsStatus" class="note" hidden></div>
+        <div id="reportsBody" class="dash-grid"></div>
+      </div>
+    </section>
+
+    <dialog id="reportDialog" class="modal" aria-labelledby="reportTitle">
+      <form id="reportForm" novalidate>
+        <div class="modal-head">
+          <h3 id="reportTitle">Report a price</h3>
+          <button type="button" class="icon-btn" data-close aria-label="Close">×</button>
+        </div>
+        <div id="reportTarget" class="report-target"></div>
+        <label class="field">
+          <span>Price you saw</span>
+          <span class="money-input"><span aria-hidden="true">$</span><input id="rpPrice" type="number" step="0.01" min="0.25" max="20" inputmode="decimal" placeholder="0.00" required></span>
+        </label>
+        <p id="rpError" class="field-error" hidden></p>
+        <label class="check"><input type="checkbox" id="rpInPerson" checked> I saw this price in person today</label>
+        <label class="field">
+          <span>Note <em>(optional)</em></span>
+          <textarea id="rpNote" maxlength="200" rows="2" placeholder="e.g. new shelf tag, sale price, out of stock"></textarea>
+        </label>
+        <p class="fine">Please don't include names or personal details. Reports go privately to the TAMU Energize team for review.</p>
+        <div class="modal-actions">
+          <button type="button" class="btn" data-close>Cancel</button>
+          <button type="submit" class="btn btn-primary">Send report</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="teamDialog" class="modal" aria-labelledby="teamTitle">
+      <form id="teamForm" novalidate>
+        <div class="modal-head">
+          <h3 id="teamTitle">Team sign-in</h3>
+          <button type="button" class="icon-btn" data-close aria-label="Close">×</button>
+        </div>
+        <p class="fine" style="font-size:13px">For the TAMU Energize team. Enter the team key to review all price reports on this device.</p>
+        <p id="teamModeNote" class="note" hidden></p>
+        <label class="field">
+          <span>Team key</span>
+          <input id="teamKeyInput" class="text-input" type="password" autocomplete="current-password" required>
+        </label>
+        <p id="teamError" class="field-error" hidden></p>
+        <div class="modal-actions">
+          <button type="button" class="btn" data-close>Cancel</button>
+          <button id="teamSubmit" type="submit" class="btn btn-primary">Sign in</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+    <div id="tip" class="tip" role="tooltip" hidden></div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <script src="config.js"></script>
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
