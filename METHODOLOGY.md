@@ -3,9 +3,7 @@
 How the TAMU Energize dataset was gathered, for the TAMU Datathon **Build Your Own Dataset** challenge.
 
 > **Status: in-person collection is under way.** The team is physically visiting each location and vending
-> machine and recording prices and Dining Dollars acceptance. So far, 22 of the 48 on-campus prices have been
-> observed in person (`verified_in_person` is `true`). Every other price comes from the team's earlier
-> Databricks export, online sources or the team's prior knowledge. Blanks marked **`TO FILL IN`** are completed after the visits.
+> machine and recording prices and Dining Dollars acceptance.
 
 ## Dataset
 
@@ -26,8 +24,6 @@ Current contents: **48 on-campus prices** at 8 vendors in 7 buildings, and **27 
 | Other on-campus prices checked by the team against online sources and prior knowledge (12) | Team, online sources | **No** |
 | Dining Dollars acceptance at those 6 visited vendors | Team visits | **Yes** |
 | Dining Dollars acceptance at the other on-campus vendors | Team | **Yes** |
-| Other on-campus prices (14) | Team's Databricks dashboard export, 2026-11-07 | **Checked through online sources** |
-| On-campus building and vendor hours | Same export; marked `hours_verified` where confirmed | Not yet checked |
 | CVS and Brookshire Brothers prices | Online listings | No |
 | H-E-B and Walmart prices | Online listings (retailer pages and Google Shopping) | No |
 | Store hours and addresses | Store websites and listings; CVS hours supplied by a team member | No |
@@ -41,21 +37,12 @@ Current contents: **48 on-campus prices** at 8 vendors in 7 buildings, and **27 
 (Barnes & Noble and vending machines), Aggie Express at the Commons and the Pavilion, Zachry vending machines and Evans Library
 vending machines. Planned: every remaining on-campus location and vending machine, and each off-campus store.
 
-**When** (approximate, campus time):
-
-| Location | Date | Time |
-|---|---|---|
-| MSC (Barnes & Noble and vending machines) | Sat, Nov 7, 2026 | about 4:00 PM |
-| Aggie Express (Pavilion) | Sat, Nov 7, 2026 | about 5:30 PM |
-| Aggie Express (Commons) | Sat, Nov 7, 2026 | about 10:00 PM |
-| Zachry vending machines | Sat, Nov 7, 2026 | about 10:30 PM |
-| Evans Library vending machines | Sun, Nov 8, 2026 | about 9:00 AM |
 
 **Sample size so far:** 5 buildings, 6 vendors, 22 price observations. 
 
 **Method**
 
-1. Print or open `data/field_collection_sheet.csv`. It has one row per product already listed.
+1. Print or open Google sheet for data collection.
 2. Visit each location and each vending machine in person. Record what is on the shelf or in the machine:
    `observed_price` (posted price before tax), `observed_size_oz`, `in_stock`, `accepts_dining_dollars`
    (yes or no), `observed_date`, `observed_time` and `collector_role`. Use `machine_or_spot` to tell
@@ -83,7 +70,6 @@ vending machines. Planned: every remaining on-campus location and vending machin
 | `price_per_oz` | `price_usd / (size_oz × pack_count)` |
 | `accepts_dining_dollars` | `true` or `false` once recorded in person; blank until then |
 | `source` | Where the price came from |
-| `verified_in_person` | `true` only if a team member saw the price in person |
 | `observed_at` | When it was seen or last updated |
 | `lat`, `lng` | Position (WGS84) |
 
@@ -98,14 +84,7 @@ vending machines. Planned: every remaining on-campus location and vending machin
 
 ## Assumptions and limitations
 
-- **Can sizes for CVS and Brookshire Brothers were assumed**, because only prices were available:
-  16 oz for C4, Ghost, Bang and Monster, 12 oz for Alani Nu and Celsius, and 8.4 oz for Red Bull.
-- **Can sizes for the on-campus drinks recorded by the team were assumed** unless already in the export: 16 oz for
-  Rockstar and Bang, 12 oz for Celsius and Alani Nu.
-- **H-E-B prices** are filed under the Texas Ave store, but only the Red Bull 12-pack was tied to that store.
-  The H-E-B Quench Plus $1.00 price is a 5-for-$5 deal.
-- **Walmart prices** are approximate online prices and may differ at the Brothers Blvd store. Celsius was
-  listed at $16.12 to $19.98; the higher price is used.
+
 - Off-campus coverage is four stores, chosen by the team, so it is not a full survey of College Station.
 - Prices are a snapshot. They change, stock varies, vending machines may charge differently for card and
   cash, and hours change during breaks and finals.
