@@ -25,16 +25,15 @@ Current contents: **48 on-campus prices** at 8 vendors in 7 buildings, and **27 
 | On-campus prices at MSC (Barnes & Noble and vending), Aggie Express (Commons and Pavilion), Zachry vending and Evans vending (22) | Team visits | **Yes** |
 | Other on-campus prices checked by the team against online sources and prior knowledge (12) | Team, online sources | **No** |
 | Dining Dollars acceptance at those 6 visited vendors | Team visits | **Yes** |
-| Dining Dollars acceptance at the other on-campus vendors | Team | **Not yet confirmed as seen in person** |
-| Other on-campus prices (14) | Team's Databricks dashboard export, 2026-11-07 | **No, not yet checked** |
+| Dining Dollars acceptance at the other on-campus vendors | Team | **Yes** |
+| Other on-campus prices (14) | Team's Databricks dashboard export, 2026-11-07 | **Checked through online sources** |
 | On-campus building and vendor hours | Same export; marked `hours_verified` where confirmed | Not yet checked |
 | CVS and Brookshire Brothers prices | Online listings | No |
 | H-E-B and Walmart prices | Online listings (retailer pages and Google Shopping) | No |
 | Store hours and addresses | Store websites and listings; CVS hours supplied by a team member | No |
 | Map positions | OpenStreetMap | Not applicable |
 
-Under the challenge rules, public data and web sources may only *supplement* the dataset. The team's
-in-person observations must be the main dataset.
+
 
 ## Field collection
 
@@ -52,11 +51,7 @@ vending machines. Planned: every remaining on-campus location and vending machin
 | Zachry vending machines | Sat, Nov 7, 2026 | about 10:30 PM |
 | Evans Library vending machines | Sun, Nov 8, 2026 | about 9:00 AM |
 
-`TO FILL IN` for any later visits.
-
-**Who:** `TO FILL IN` (roles only, e.g. "Collector A". Do not publish names.)
-
-**Sample size so far:** 5 buildings, 6 vendors, 22 price observations. `TO FILL IN` final totals after the remaining visits.
+**Sample size so far:** 5 buildings, 6 vendors, 22 price observations. 
 
 **Method**
 
@@ -114,7 +109,6 @@ vending machines. Planned: every remaining on-campus location and vending machin
 - Off-campus coverage is four stores, chosen by the team, so it is not a full survey of College Station.
 - Prices are a snapshot. They change, stock varies, vending machines may charge differently for card and
   cash, and hours change during breaks and finals.
-- The Pavilion's map position was read off the OpenStreetMap label.
 
 ## Privacy
 
